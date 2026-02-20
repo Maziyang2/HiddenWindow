@@ -47,4 +47,5 @@ dotnet publish .\src\HiddenWindow\HiddenWindow.csproj -c Release -r win-x64 --se
 - 关闭程序可在托盘菜单中选择“退出”
 
 ## 发行版本说明
-- 可直接下载运行以打包好的exe文件
+- 可直接下载运行已打包好的exe文件
+
