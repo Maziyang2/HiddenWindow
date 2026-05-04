@@ -4,8 +4,13 @@
 
 HiddenWindow is a Windows smart window management tool: when you drag a window to the top/left/right/bottom edge of the screen, it auto-snaps and hides off-screen, leaving only a 5px thin edge visible. Moving the mouse to that edge slides the window back out and brings it to the foreground; moving the mouse away hides it again. Supports multi-monitor setups and excludes maximized/fullscreen windows.
 
-## Version
-- Current: `v1.2`
+## Download
+
+Pre-built `HiddenWindow.exe` is automatically generated for each release via GitHub Actions.
+
+👉 **[Download the latest release](https://github.com/Maziyang2/HiddenWindow/releases/latest)**
+
+Just download and run — no installation required.
 
 ## Features
 - Snap & hide to top/left/right/bottom edges (5px visible edge)
@@ -18,23 +23,31 @@ HiddenWindow is a Windows smart window management tool: when you drag a window t
 - System tray with auto-start toggle
 
 ## Changelog
+
+See [Releases](https://github.com/Maziyang2/HiddenWindow/releases) for detailed changelogs.
+
 ### v1.2 (2026-05-04)
-- Added: bottom edge docking support
+- **Added:** Bottom edge docking support
+- **Added:** GitHub Actions auto-build & release workflow
 
 ### v1.1 (2026-03-07)
-- Added: hidden window auto brings to top and activates focus on slide-out
-- Optimization: triggers slide-out and top-most only when cursor enters the trigger zone from the corresponding edge
-- Updated: assembly and file version to `1.1.0.0`
+- **Added:** Auto bring-to-front and focus activation on slide-out
+- **Fixed:** Reduced unintended focus stealing by only triggering on corresponding edge
+- **Changed:** Assembly version updated to `1.1.0.0`
 
-## Running
-1. Run via `dotnet` or published `exe`
-2. Adjust sensitivity, animation speed, and auto-start from the tray icon menu
+## Usage
+1. Download `HiddenWindow.exe` from [Releases](https://github.com/Maziyang2/HiddenWindow/releases)
+2. Run it — the app lives in the system tray
+3. Adjust sensitivity, animation speed, and auto-start from the tray icon menu
+4. First run creates config at: `%AppData%\HiddenWindow\settings.json`
+5. To quit, select "退出" from the tray menu
 
 ## Project Structure
 - `src/HiddenWindow` — main program source
 - `README.md` — English documentation
 - `README_zh.md` — Chinese documentation
 - `LICENSE` — license
+- `.github/workflows/release.yml` — auto-build workflow
 
 ## Source Files
 - `src/HiddenWindow/Program.cs` — entry point
@@ -43,21 +56,15 @@ HiddenWindow is a Windows smart window management tool: when you drag a window t
 - `src/HiddenWindow/WinApi.cs` — Win32 API P/Invoke wrappers
 - `src/HiddenWindow/Settings.cs` — config read/write and defaults
 
-## Build
+## Build from Source
 Requires .NET 8 SDK.
 
 ```powershell
 dotnet build .\src\HiddenWindow\HiddenWindow.csproj -c Release
 ```
 
-## Publish (generate exe)
 ```powershell
 dotnet publish .\src\HiddenWindow\HiddenWindow.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
-发布产物在：
-`src/HiddenWindow/bin/Release/net8.0-windows/win-x64/publish/HiddenWindow.exe`
-
-## 说明
-- 首次运行将创建配置文件：`%AppData%\HiddenWindow\settings.json`
-- 关闭程序可在托盘菜单中选择“退出”
+Output: `src/HiddenWindow/bin/Release/net8.0-windows/win-x64/publish/HiddenWindow.exe`
