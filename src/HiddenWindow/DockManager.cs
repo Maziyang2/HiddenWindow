@@ -11,7 +11,8 @@ internal enum DockEdge
 {
     Left,
     Right,
-    Top
+    Top,
+    Bottom
 }
 
 internal sealed class DockedWindow
@@ -202,6 +203,11 @@ internal sealed class DockManager : IDisposable
             y = monitor.Top;
             x = Clamp(rect.Left, monitor.Left, monitor.Right - width);
         }
+        else if (edge == DockEdge.Bottom)
+        {
+            y = monitor.Bottom - height;
+            x = Clamp(rect.Left, monitor.Left, monitor.Right - width);
+        }
 
         return new WinApi.RECT { Left = x, Top = y, Right = x + width, Bottom = y + height };
     }
@@ -220,8 +226,15 @@ internal sealed class DockManager : IDisposable
             return new WinApi.RECT { Left = x, Top = shown.Top, Right = x + shown.Width, Bottom = shown.Bottom };
         }
 
-        var yTop = monitor.Top - (shown.Height - visiblePx);
-        return new WinApi.RECT { Left = shown.Left, Top = yTop, Right = shown.Right, Bottom = yTop + shown.Height };
+        if (edge == DockEdge.Top)
+        {
+            var yTop = monitor.Top - (shown.Height - visiblePx);
+            return new WinApi.RECT { Left = shown.Left, Top = yTop, Right = shown.Right, Bottom = yTop + shown.Height };
+        }
+
+        // Bottom: 窗口向下隐藏，保留 visiblePx 露在屏幕底部
+        var yBottom = monitor.Bottom - visiblePx;
+        return new WinApi.RECT { Left = shown.Left, Top = yBottom, Right = shown.Right, Bottom = yBottom + shown.Height };
     }
 
     private void PollMouseAndWindows()
@@ -432,6 +445,12 @@ internal sealed class DockManager : IDisposable
             candidates.Add((DockEdge.Top, topDist));
         }
 
+        var bottomDist = Math.Abs(monitor.Bottom - rect.Bottom);
+        if (bottomDist <= sensitivity)
+        {
+            candidates.Add((DockEdge.Bottom, bottomDist));
+        }
+
         if (candidates.Count == 0)
         {
             edge = DockEdge.Left;
@@ -466,7 +485,13 @@ internal sealed class DockManager : IDisposable
             return pt.X <= monitor.Right && pt.X >= monitor.Right - sensitivity;
         }
 
-        return pt.Y >= monitor.Top && pt.Y <= monitor.Top + sensitivity;
+        if (edge == DockEdge.Top)
+        {
+            return pt.Y >= monitor.Top && pt.Y <= monitor.Top + sensitivity;
+        }
+
+        // Bottom: 鼠标在屏幕底部边缘区域
+        return pt.Y <= monitor.Bottom && pt.Y >= monitor.Bottom - sensitivity;
     }
 
     private static int Lerp(int from, int to, double t)
