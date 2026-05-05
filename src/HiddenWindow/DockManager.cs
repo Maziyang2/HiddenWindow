@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Windows.Forms;
 using FormsTimer = System.Windows.Forms.Timer;
 
@@ -42,13 +43,15 @@ internal sealed class DockManager : IDisposable
     private IntPtr _hookStart = IntPtr.Zero;
     private IntPtr _hookEnd = IntPtr.Zero;
     private WinApi.WinEventDelegate? _eventDelegate;
+    private EdgeHintForm? _hintForm;
 
     private const int PollIntervalMs = 50;
-    private const int HideDelayMs = 300;
+    public bool IsPaused { get; set; }
 
-    public DockManager(AppSettings settings)
+    public DockManager(AppSettings settings, EdgeHintForm? hintForm = null)
     {
         _settings = settings;
+        _hintForm = hintForm;
         _currentProcessId = (uint)Process.GetCurrentProcess().Id;
 
         _pollTimer = new FormsTimer { Interval = PollIntervalMs };
@@ -239,6 +242,9 @@ internal sealed class DockManager : IDisposable
 
     private void PollMouseAndWindows()
     {
+        if (IsPaused)
+            return;
+
         if ((WinApi.GetAsyncKeyState(WinApi.VK_LBUTTON) & 0x8000) != 0)
         {
             return;
@@ -250,6 +256,9 @@ internal sealed class DockManager : IDisposable
         }
 
         var now = DateTime.UtcNow;
+        var anyTriggerZone = false;
+        Point hintPoint = default;
+        string? hintTitle = null;
 
         foreach (var docked in _docked.Values.ToList())
         {
@@ -268,6 +277,14 @@ internal sealed class DockManager : IDisposable
                 _settings.EdgeSensitivityPx);
             var enteredTriggerZone = isInTriggerZone && !docked.WasCursorInTriggerZone;
             docked.WasCursorInTriggerZone = isInTriggerZone;
+
+            // 收集隐藏窗口的提示信息
+            if (docked.IsHidden && isInTriggerZone && !docked.IsAnimating)
+            {
+                anyTriggerZone = true;
+                hintPoint = new Point(pt.X, pt.Y);
+                hintTitle = GetWindowTitle(docked.Hwnd);
+            }
 
             if (docked.IsAnimating)
             {
@@ -288,7 +305,7 @@ internal sealed class DockManager : IDisposable
                     continue;
                 }
 
-                if ((now - docked.LastShownUtc).TotalMilliseconds < HideDelayMs)
+                if ((now - docked.LastShownUtc).TotalMilliseconds < _settings.HideDelayMs)
                 {
                     continue;
                 }
@@ -298,6 +315,15 @@ internal sealed class DockManager : IDisposable
                     HideDockedWindow(docked);
                 }
             }
+        }
+
+        // 边缘提示：有隐藏窗口在触发区则显示标题，否则隐藏
+        if (_hintForm != null)
+        {
+            if (anyTriggerZone && hintTitle != null)
+                _hintForm.ShowHint(hintPoint, hintTitle);
+            else
+                _hintForm.HideHint();
         }
     }
 
@@ -319,25 +345,21 @@ internal sealed class DockManager : IDisposable
     {
         docked.IsAnimating = true;
 
-        var duration = _settings.AnimationSpeed switch
-        {
-            AnimationSpeed.Fast => 120,
-            AnimationSpeed.Medium => 240,
-            _ => 360
-        };
+        var duration = _settings.EffectiveAnimationDurationMs;
 
         var sw = Stopwatch.StartNew();
         var timer = new FormsTimer { Interval = 15 };
         timer.Tick += (_, _) =>
         {
-            var t = Math.Min(1.0, sw.Elapsed.TotalMilliseconds / duration);
+            var linearT = Math.Min(1.0, sw.Elapsed.TotalMilliseconds / duration);
+            var t = EaseInOutQuad(linearT);  // 缓动曲线
             var x = Lerp(from.Left, to.Left, t);
             var y = Lerp(from.Top, to.Top, t);
 
             WinApi.SetWindowPos(docked.Hwnd, IntPtr.Zero, x, y, 0, 0,
                 WinApi.SWP_NOZORDER | WinApi.SWP_NOACTIVATE | WinApi.SWP_NOSIZE);
 
-            if (t >= 1.0)
+            if (linearT >= 1.0)
             {
                 timer.Stop();
                 timer.Dispose();
@@ -504,6 +526,23 @@ internal sealed class DockManager : IDisposable
         if (value < min) return min;
         if (value > max) return max;
         return value;
+    }
+
+    // ease-in-out 缓动曲线: t => t<0.5 ? 2*t² : 1-(-2t+2)²/2
+    private static double EaseInOutQuad(double t)
+    {
+        return t < 0.5 ? 2.0 * t * t : 1.0 - Math.Pow(-2.0 * t + 2.0, 2) / 2.0;
+    }
+
+    // 获取窗口标题
+    private static string? GetWindowTitle(IntPtr hwnd)
+    {
+        var len = WinApi.GetWindowTextLength(hwnd);
+        if (len <= 0) return null;
+        var sb = new System.Text.StringBuilder(len + 1);
+        WinApi.GetWindowText(hwnd, sb, sb.Capacity);
+        var title = sb.ToString();
+        return string.IsNullOrWhiteSpace(title) ? null : title;
     }
 
     public void Dispose()

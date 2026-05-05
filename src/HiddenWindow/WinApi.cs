@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace HiddenWindow;
 
@@ -13,6 +14,8 @@ internal static class WinApi
 
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
+    public const int WS_EX_LAYERED = 0x00080000;
+    public const int WS_EX_TRANSPARENT = 0x00000020;
 
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
@@ -21,8 +24,16 @@ internal static class WinApi
     public const uint SWP_SHOWWINDOW = 0x0040;
 
     public const int VK_LBUTTON = 0x01;
+    public const int VK_H = 0x48;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new(-2);
+
+    // Hotkey
+    public const int WM_HOTKEY = 0x0312;
+    public const uint MOD_ALT = 0x0001;
+    public const uint MOD_CONTROL = 0x0002;
+    public const uint MOD_NOREPEAT = 0x4000;
+    public const int HOTKEY_ID_PAUSE = 1;
 
     public delegate void WinEventDelegate(
         IntPtr hWinEventHook,
@@ -129,4 +140,18 @@ internal static class WinApi
         GetMonitorInfo(monitor, ref mi);
         return mi;
     }
+
+    // 全局热键
+    [DllImport("user32.dll")]
+    public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+    [DllImport("user32.dll")]
+    public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    // 窗口标题
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    public static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 }
