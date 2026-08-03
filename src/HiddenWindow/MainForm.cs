@@ -58,7 +58,7 @@ internal sealed class MainForm : Form
             RegisterHotkey();
 
         // 后台检查更新
-        Task.Run(CheckForUpdate);
+        Task.Run(() => CheckForUpdate(manual: false));
     }
 
     protected override void WndProc(ref Message m)
