@@ -1,4 +1,4 @@
-# HiddenWindow v1.3
+# HiddenWindow v1.4
 
 [English](./README.md)
 

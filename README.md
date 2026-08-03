@@ -1,4 +1,4 @@
-# HiddenWindow v1.3
+# HiddenWindow v1.4
 
 [中文版](./README_zh.md)
 
