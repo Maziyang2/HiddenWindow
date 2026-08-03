@@ -31,6 +31,16 @@ Just download and run — no installation required.
 
 See [Releases](https://github.com/Maziyang2/HiddenWindow/releases) for detailed changelogs.
 
+### v1.4 (2026-08-03)
+- **Fixed:** Window no longer brought to front before animation starts; now activates after slide-out animation completes
+- **Fixed:** Multiple windows docked on the same edge now only show the one whose Y/X-range matches the cursor position
+- **Fixed:** Tray menu pause/resume text now updates immediately after settings dialog closes
+- **Fixed:** Settings update now skips animating windows to prevent animation interruption
+- **Fixed:** Manual update check now shows an error message on network failure
+- **Fixed:** Edge hint form now performs layout before positioning, preventing offset
+- **Fixed:** Added 10-second timeout to HttpClient to prevent long blocking on network issues
+- **Optimized:** Simplified tray menu — removed redundant "Edge Sensitivity", "Animation Speed", and "Auto Start" items that duplicate settings window
+
 ### v1.3 (2026-05-05)
 - **Added:** Settings window with sliders for all options
 - **Added:** Global hotkey `Ctrl+Alt+H` to pause/resume docking
