@@ -19,6 +19,9 @@ internal sealed class MainForm : Form
     private const string AutoStartValueName = "HiddenWindow";
     private const string GitHubApiUrl = "https://api.github.com/repos/Maziyang2/HiddenWindow/releases/latest";
 
+    // v1.4: 托盘菜单项引用，用于设置关闭后刷新文本
+    private ToolStripMenuItem? _pauseMenuItem;
+
     public MainForm()
     {
         Text = "HiddenWindow";
@@ -81,62 +84,32 @@ internal sealed class MainForm : Form
     {
         var menu = new ContextMenuStrip();
 
-        // 设置
+        // 设置（完整配置入口）
         var settingsItem = new ToolStripMenuItem("设置...");
         settingsItem.Click += (_, _) => ShowSettings();
         menu.Items.Add(settingsItem);
 
         menu.Items.Add(new ToolStripSeparator());
 
-        // 暂停/恢复
-        var pauseItem = new ToolStripMenuItem(_settings.PauseDocking ? "恢复吸附" : "暂停吸附")
+        // 暂停/恢复（v1.4: 保存引用以便设置关闭后刷新文本）
+        _pauseMenuItem = new ToolStripMenuItem(_settings.PauseDocking ? "恢复吸附" : "暂停吸附")
         {
             ShortcutKeyDisplayString = "Ctrl+Alt+H"
         };
-        pauseItem.Click += (_, _) => TogglePause();
-        menu.Items.Add(pauseItem);
-
-        menu.Items.Add(new ToolStripSeparator());
-
-        // 快速设置子菜单
-        var sensitivityMenu = new ToolStripMenuItem("边缘灵敏度");
-        sensitivityMenu.DropDownItems.Add(CreateSensitivityItem("20 px", 20));
-        sensitivityMenu.DropDownItems.Add(CreateSensitivityItem("50 px", 50));
-        sensitivityMenu.DropDownItems.Add(CreateSensitivityItem("70 px", 70));
-        menu.Items.Add(sensitivityMenu);
-
-        var speedMenu = new ToolStripMenuItem("动画速度");
-        speedMenu.DropDownItems.Add(CreateSpeedItem("快", AnimationSpeed.Fast));
-        speedMenu.DropDownItems.Add(CreateSpeedItem("适中", AnimationSpeed.Medium));
-        speedMenu.DropDownItems.Add(CreateSpeedItem("慢", AnimationSpeed.Slow));
-        menu.Items.Add(speedMenu);
-
-        // 开机自启
-        var autoStartItem = new ToolStripMenuItem("开机自启")
-        {
-            Checked = _settings.AutoStart,
-            CheckOnClick = true
-        };
-        autoStartItem.CheckedChanged += (_, _) =>
-        {
-            _settings.AutoStart = autoStartItem.Checked;
-            SetAutoStart(_settings.AutoStart);
-            _settings.Save();
-        };
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(autoStartItem);
+        _pauseMenuItem.Click += (_, _) => TogglePause();
+        menu.Items.Add(_pauseMenuItem);
 
         menu.Items.Add(new ToolStripSeparator());
 
         // 检查更新
         var updateItem = new ToolStripMenuItem("检查更新");
-        updateItem.Click += async (_, _) => await CheckForUpdate();
+        updateItem.Click += async (_, _) => await CheckForUpdate(manual: true);
         menu.Items.Add(updateItem);
 
         // 关于
         var aboutItem = new ToolStripMenuItem("关于");
         aboutItem.Click += (_, _) =>
-            MessageBox.Show("HiddenWindow v1.3\n智能窗口边缘吸附管理工具\n\n快捷键: Ctrl+Alt+H 暂停/恢复",
+            MessageBox.Show("HiddenWindow v1.4\n智能窗口边缘吸附管理工具\n\n快捷键: Ctrl+Alt+H 暂停/恢复",
                 "关于 HiddenWindow", MessageBoxButtons.OK, MessageBoxIcon.Information);
         menu.Items.Add(aboutItem);
 
@@ -157,12 +130,19 @@ internal sealed class MainForm : Form
             _dockManager.IsPaused = false;
             _dockManager.UpdateSettings(updatedSettings);
 
+            // 同步开机自启到注册表（v1.4: 托盘菜单已移除该项，统一在设置中管理）
+            SetAutoStart(updatedSettings.AutoStart);
+
             // 热键状态变更
             UnregisterHotkey();
             if (updatedSettings.HotkeyEnabled)
                 RegisterHotkey();
         });
         form.ShowDialog();
+
+        // v1.4: 设置窗口关闭后刷新托盘菜单的暂停/恢复文本
+        if (_pauseMenuItem != null)
+            _pauseMenuItem.Text = _dockManager.IsPaused ? "恢复吸附" : "暂停吸附";
     }
 
     private void TogglePause()
@@ -187,17 +167,18 @@ internal sealed class MainForm : Form
         WinApi.UnregisterHotKey(Handle, WinApi.HOTKEY_ID_PAUSE);
     }
 
-    private static async Task CheckForUpdate()
+    // v1.4: 增加 manual 参数 — 手动检查时网络异常弹出提示；增加 HttpClient 超时
+    private static async Task CheckForUpdate(bool manual = false)
     {
         try
         {
-            using var client = new HttpClient();
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("HiddenWindow");
             var json = await client.GetStringAsync(GitHubApiUrl);
             using var doc = JsonDocument.Parse(json);
             var tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
 
-            var currentVersion = "v1.3.0";
+            var currentVersion = "v1.4.0";
             if (string.Compare(tag, currentVersion, StringComparison.OrdinalIgnoreCase) > 0)
             {
                 var url = doc.RootElement.GetProperty("html_url").GetString();
@@ -212,58 +193,12 @@ internal sealed class MainForm : Form
         }
         catch
         {
-            // 网络不通静默忽略（后台检查时），手动检查时给提示
-        }
-    }
-
-    private ToolStripMenuItem CreateSensitivityItem(string label, int value)
-    {
-        var item = new ToolStripMenuItem(label)
-        {
-            Checked = _settings.EdgeSensitivityPx == value,
-            CheckOnClick = true
-        };
-
-        item.Click += (_, _) =>
-        {
-            _settings.EdgeSensitivityPx = value;
-            UncheckSiblings(item);
-            _settings.Save();
-            _dockManager.UpdateSettings(_settings);
-        };
-
-        return item;
-    }
-
-    private ToolStripMenuItem CreateSpeedItem(string label, AnimationSpeed speed)
-    {
-        var item = new ToolStripMenuItem(label)
-        {
-            Checked = _settings.AnimationSpeed == speed,
-            CheckOnClick = true
-        };
-
-        item.Click += (_, _) =>
-        {
-            _settings.AnimationSpeed = speed;
-            _settings.AnimationDurationMs = 0; // 使用枚举值
-            UncheckSiblings(item);
-            _settings.Save();
-            _dockManager.UpdateSettings(_settings);
-        };
-
-        return item;
-    }
-
-    private static void UncheckSiblings(ToolStripMenuItem item)
-    {
-        if (item.GetCurrentParent() is not ToolStripDropDownMenu parent)
-            return;
-
-        foreach (ToolStripItem sibling in parent.Items)
-        {
-            if (sibling is ToolStripMenuItem menuItem && menuItem != item)
-                menuItem.Checked = false;
+            if (manual)
+            {
+                MessageBox.Show("检查更新失败，请检查网络连接。", "更新提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            // 后台检查时静默忽略
         }
     }
 

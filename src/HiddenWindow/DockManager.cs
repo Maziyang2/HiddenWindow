@@ -66,6 +66,9 @@ internal sealed class DockManager : IDisposable
         _settings = settings;
         foreach (var docked in _docked.Values)
         {
+            // v1.4: 跳过正在动画中的窗口，防止动画被粗暴打断
+            if (docked.IsAnimating) continue;
+
             RecalculateRects(docked);
             if (docked.IsHidden)
             {
@@ -274,7 +277,8 @@ internal sealed class DockManager : IDisposable
                 pt,
                 docked.Monitor.rcMonitor,
                 docked.Edge,
-                _settings.EdgeSensitivityPx);
+                _settings.EdgeSensitivityPx,
+                docked.ShownRect);  // v1.4: 传入窗口矩形，按 Y/X 范围过滤
             var enteredTriggerZone = isInTriggerZone && !docked.WasCursorInTriggerZone;
             docked.WasCursorInTriggerZone = isInTriggerZone;
 
@@ -330,18 +334,25 @@ internal sealed class DockManager : IDisposable
     private void ShowDockedWindow(DockedWindow docked, DateTime now)
     {
         docked.LastShownUtc = now;
-        AnimateWindow(docked, docked.HiddenRect, docked.ShownRect);
-        BringWindowToFront(docked.Hwnd);
         docked.IsHidden = false;
+        // v1.4: 动画完成后才置顶，避免窗口在隐藏位置被激活导致跳跃
+        AnimateWindow(docked, docked.HiddenRect, docked.ShownRect, () =>
+        {
+            BringWindowToFront(docked.Hwnd);
+        });
     }
 
     private void HideDockedWindow(DockedWindow docked)
     {
-        AnimateWindow(docked, docked.ShownRect, docked.HiddenRect);
-        docked.IsHidden = true;
+        // v1.4: 动画完成后才标记为隐藏，防止轮询中途再次触发显示
+        AnimateWindow(docked, docked.ShownRect, docked.HiddenRect, () =>
+        {
+            docked.IsHidden = true;
+        });
     }
 
-    private void AnimateWindow(DockedWindow docked, WinApi.RECT from, WinApi.RECT to)
+    // v1.4: 增加 onCompleted 回调，动画完成后执行（如置顶 / 标记隐藏）
+    private void AnimateWindow(DockedWindow docked, WinApi.RECT from, WinApi.RECT to, Action? onCompleted = null)
     {
         docked.IsAnimating = true;
 
@@ -364,6 +375,7 @@ internal sealed class DockManager : IDisposable
                 timer.Stop();
                 timer.Dispose();
                 docked.IsAnimating = false;
+                onCompleted?.Invoke();
             }
         };
         timer.Start();
@@ -488,7 +500,8 @@ internal sealed class DockManager : IDisposable
         return pt.X >= rect.Left && pt.X <= rect.Right && pt.Y >= rect.Top && pt.Y <= rect.Bottom;
     }
 
-    private static bool IsCursorInEdgeZone(WinApi.POINT pt, WinApi.RECT monitor, DockEdge edge, int sensitivity)
+    // v1.4: 增加 windowRect 参数，同侧多窗口时只触发 Y/X 范围匹配的窗口
+    private static bool IsCursorInEdgeZone(WinApi.POINT pt, WinApi.RECT monitor, DockEdge edge, int sensitivity, WinApi.RECT windowRect)
     {
         var insideMonitor = pt.X >= monitor.Left && pt.X <= monitor.Right
             && pt.Y >= monitor.Top && pt.Y <= monitor.Bottom;
@@ -499,21 +512,25 @@ internal sealed class DockManager : IDisposable
 
         if (edge == DockEdge.Left)
         {
-            return pt.X >= monitor.Left && pt.X <= monitor.Left + sensitivity;
+            return pt.X >= monitor.Left && pt.X <= monitor.Left + sensitivity
+                && pt.Y >= windowRect.Top && pt.Y <= windowRect.Bottom;
         }
 
         if (edge == DockEdge.Right)
         {
-            return pt.X <= monitor.Right && pt.X >= monitor.Right - sensitivity;
+            return pt.X <= monitor.Right && pt.X >= monitor.Right - sensitivity
+                && pt.Y >= windowRect.Top && pt.Y <= windowRect.Bottom;
         }
 
         if (edge == DockEdge.Top)
         {
-            return pt.Y >= monitor.Top && pt.Y <= monitor.Top + sensitivity;
+            return pt.Y >= monitor.Top && pt.Y <= monitor.Top + sensitivity
+                && pt.X >= windowRect.Left && pt.X <= windowRect.Right;
         }
 
         // Bottom: 鼠标在屏幕底部边缘区域
-        return pt.Y <= monitor.Bottom && pt.Y >= monitor.Bottom - sensitivity;
+        return pt.Y <= monitor.Bottom && pt.Y >= monitor.Bottom - sensitivity
+            && pt.X >= windowRect.Left && pt.X <= windowRect.Right;
     }
 
     private static int Lerp(int from, int to, double t)

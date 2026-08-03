@@ -62,6 +62,8 @@ internal sealed class EdgeHintForm : Form
         if (!Visible)
         {
             _titleLabel.Text = windowTitle;
+            // v1.4: 先强制布局计算，确保 Height 已根据新文本更新，再定位
+            PerformLayout();
             // 定位在鼠标上方偏右
             Location = new Point(screenPos.X + 12, screenPos.Y - Height - 8);
             Opacity = 0.92;
