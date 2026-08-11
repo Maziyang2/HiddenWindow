@@ -12,6 +12,13 @@ internal enum AnimationSpeed
     Slow
 }
 
+internal enum LanguageMode
+{
+    System,
+    ChineseSimplified,
+    English
+}
+
 internal sealed class AppSettings
 {
     public int EdgeSensitivityPx { get; set; } = 50;
@@ -25,6 +32,7 @@ internal sealed class AppSettings
     public bool PauseDocking { get; set; } = false;
 
     public bool AutoStart { get; set; } = false;
+    public LanguageMode Language { get; set; } = LanguageMode.System;
 
     [JsonIgnore]
     public static string SettingsPath => Path.Combine(

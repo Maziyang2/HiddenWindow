@@ -6,6 +6,8 @@ namespace HiddenWindow;
 
 internal static class WinApi
 {
+    [DllImport("dwmapi.dll")]
+    internal static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int valueSize);
     public const uint EVENT_SYSTEM_MOVESIZESTART = 0x000A;
     public const uint EVENT_SYSTEM_MOVESIZEEND = 0x000B;
     public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">HiddenWindow v2 brand mark</title>
+  <desc id="desc">A monochrome window frame with a panel sliding beyond the right edge.</desc>
+  <rect width="1024" height="1024" rx="176" fill="#0C0C0D"/>
+  <rect x="32" y="32" width="960" height="960" rx="148" fill="none" stroke="#343438" stroke-width="32"/>
+  <path d="M236 232H716V508" fill="none" stroke="#F4F4F6" stroke-width="60" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M236 232V712H548" fill="none" stroke="#F4F4F6" stroke-width="60" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M352 360H588M352 464H516" fill="none" stroke="#8E8E95" stroke-width="38" stroke-linecap="square"/>
+  <rect x="548" y="548" width="244" height="244" fill="#F4F4F6"/>
+  <path d="M716 280V492" stroke="#8E8E95" stroke-width="34" stroke-linecap="square"/>
+</svg>

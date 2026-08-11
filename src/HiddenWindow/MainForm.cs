@@ -30,6 +30,7 @@ internal sealed class MainForm : Form
         Opacity = 0;
 
         _settings = AppSettings.Load();
+        Localization.Configure(_settings.Language);
         _hintForm = new EdgeHintForm();
         _dockManager = new DockManager(_settings, _hintForm);
 
@@ -82,17 +83,30 @@ internal sealed class MainForm : Form
 
     private ContextMenuStrip BuildMenu()
     {
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip
+        {
+            BackColor = UiTheme.Surface,
+            ForeColor = UiTheme.Text,
+            Font = UiTheme.Font(9.5f),
+            ShowImageMargin = false,
+            Padding = new Padding(6),
+            Renderer = new ToolStripProfessionalRenderer(new HiddenWindowColorTable())
+        };
 
         // 设置（完整配置入口）
-        var settingsItem = new ToolStripMenuItem("设置...");
+        var settingsItem = new ToolStripMenuItem($"{Localization.Get("settings")}...")
+        {
+            Padding = new Padding(8, 6, 8, 6)
+        };
         settingsItem.Click += (_, _) => ShowSettings();
         menu.Items.Add(settingsItem);
 
         menu.Items.Add(new ToolStripSeparator());
 
         // 暂停/恢复（v1.4: 保存引用以便设置关闭后刷新文本）
-        _pauseMenuItem = new ToolStripMenuItem(_settings.PauseDocking ? "恢复吸附" : "暂停吸附")
+        _pauseMenuItem = new ToolStripMenuItem(_settings.PauseDocking
+            ? Localization.Get("resumeDocking")
+            : Localization.Get("pauseDocking"))
         {
             ShortcutKeyDisplayString = "Ctrl+Alt+H"
         };
@@ -102,20 +116,18 @@ internal sealed class MainForm : Form
         menu.Items.Add(new ToolStripSeparator());
 
         // 检查更新
-        var updateItem = new ToolStripMenuItem("检查更新");
+        var updateItem = new ToolStripMenuItem(Localization.Get("checkUpdates"));
         updateItem.Click += async (_, _) => await CheckForUpdate(manual: true);
         menu.Items.Add(updateItem);
 
         // 关于
-        var aboutItem = new ToolStripMenuItem("关于");
-        aboutItem.Click += (_, _) =>
-            MessageBox.Show("HiddenWindow v1.4\n智能窗口边缘吸附管理工具\n\n快捷键: Ctrl+Alt+H 暂停/恢复",
-                "关于 HiddenWindow", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        var aboutItem = new ToolStripMenuItem(Localization.Get("about"));
+        aboutItem.Click += (_, _) => new AboutForm().ShowDialog();
         menu.Items.Add(aboutItem);
 
         menu.Items.Add(new ToolStripSeparator());
 
-        var exitItem = new ToolStripMenuItem("退出");
+        var exitItem = new ToolStripMenuItem(Localization.Get("exit"));
         exitItem.Click += (_, _) => Close();
         menu.Items.Add(exitItem);
 
@@ -137,12 +149,19 @@ internal sealed class MainForm : Form
             UnregisterHotkey();
             if (updatedSettings.HotkeyEnabled)
                 RegisterHotkey();
+
+            Localization.Configure(updatedSettings.Language);
+            var oldMenu = _notifyIcon.ContextMenuStrip;
+            _notifyIcon.ContextMenuStrip = BuildMenu();
+            oldMenu?.Dispose();
         });
         form.ShowDialog();
 
         // v1.4: 设置窗口关闭后刷新托盘菜单的暂停/恢复文本
         if (_pauseMenuItem != null)
-            _pauseMenuItem.Text = _dockManager.IsPaused ? "恢复吸附" : "暂停吸附";
+            _pauseMenuItem.Text = _dockManager.IsPaused
+                ? Localization.Get("resumeDocking")
+                : Localization.Get("pauseDocking");
     }
 
     private void TogglePause()
@@ -151,7 +170,7 @@ internal sealed class MainForm : Form
         _settings.PauseDocking = _dockManager.IsPaused;
         _settings.Save();
 
-        var msg = _dockManager.IsPaused ? "吸附已暂停" : "吸附已恢复";
+        var msg = _dockManager.IsPaused ? Localization.Get("paused") : Localization.Get("resumed");
         _notifyIcon.ShowBalloonTip(1500, "HiddenWindow", msg, ToolTipIcon.Info);
     }
 
@@ -178,16 +197,18 @@ internal sealed class MainForm : Form
             using var doc = JsonDocument.Parse(json);
             var tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
 
-            var currentVersion = "v1.4.0";
-            if (string.Compare(tag, currentVersion, StringComparison.OrdinalIgnoreCase) > 0)
+            var currentVersion = typeof(MainForm).Assembly.GetName().Version ?? new Version(2, 0, 0);
+            var hasNewerVersion = Version.TryParse(tag.TrimStart('v', 'V'), out var latestVersion)
+                && latestVersion > currentVersion;
+            if (hasNewerVersion)
             {
                 var url = doc.RootElement.GetProperty("html_url").GetString();
-                MessageBox.Show($"新版本 {tag} 可用！\n\n下载地址:\n{url}",
-                    "更新提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(string.Format(Localization.Get("updateAvailable"), tag, url),
+                    Localization.Get("updateTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
-            else
+            else if (manual)
             {
-                MessageBox.Show("当前已是最新版本。", "检查更新",
+                MessageBox.Show(Localization.Get("latest"), Localization.Get("checkUpdates"),
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -195,7 +216,7 @@ internal sealed class MainForm : Form
         {
             if (manual)
             {
-                MessageBox.Show("检查更新失败，请检查网络连接。", "更新提示",
+                MessageBox.Show(Localization.Get("updateFailed"), Localization.Get("updateTitle"),
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             // 后台检查时静默忽略

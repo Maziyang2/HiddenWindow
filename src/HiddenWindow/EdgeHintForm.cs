@@ -21,20 +21,26 @@ internal sealed class EdgeHintForm : Form
         ShowInTaskbar = false;
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
-        BackColor = Color.FromArgb(32, 32, 32);
-        ForeColor = Color.White;
+        BackColor = UiTheme.SurfaceRaised;
+        ForeColor = UiTheme.Text;
         Opacity = 0;
         AutoSize = true;
-        Padding = new Padding(12, 5, 12, 5);
+        Padding = new Padding(14, 8, 14, 8);
 
         _titleLabel = new Label
         {
             AutoSize = true,
-            ForeColor = Color.White,
-            Font = new Font("Microsoft YaHei UI", 9f, FontStyle.Regular),
+            ForeColor = UiTheme.Text,
+            Font = UiTheme.Font(9f, FontStyle.Bold),
             MaximumSize = new Size(380, 0)
         };
         Controls.Add(_titleLabel);
+
+        Paint += (_, e) =>
+        {
+            using var pen = new Pen(UiTheme.LineStrong);
+            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+        };
 
         _hideTimer = new System.Windows.Forms.Timer { Interval = 100 };
         _hideTimer.Tick += (_, _) =>
@@ -66,7 +72,7 @@ internal sealed class EdgeHintForm : Form
             PerformLayout();
             // 定位在鼠标上方偏右
             Location = new Point(screenPos.X + 12, screenPos.Y - Height - 8);
-            Opacity = 0.92;
+            Opacity = 0.96;
             Show();
             _hideTimer.Start();
         }
