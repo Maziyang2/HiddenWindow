@@ -60,7 +60,7 @@ The window-docking engine remains intentionally focused. The redesign changes ho
 
 ![HiddenWindow v2 website in English](docs/screenshots/site-v2-en.png)
 
-The website and application share the same Edge Window mark, typography hierarchy, monochrome palette, control geometry, and product language. The simulated interface above mirrors the v2.0 Windows Settings design; real Windows screenshots will replace it after the release build is validated on Windows 10 and 11.
+The website and application share the same Edge Window mark, typography hierarchy, monochrome palette, control geometry, and product language. The simulated interface above mirrors the v2.0 Windows Settings design; native Windows screenshots can be added in a later documentation update.
 
 ## Language behavior
 
@@ -125,7 +125,7 @@ v2.0 统一升级了软件、官网、图标和文档的视觉系统，并新增
 
 ## Status
 
-The v2.0 redesign is under active development. The current stable executable remains available from the Releases page until the v2.0 Windows validation and release workflow are complete.
+HiddenWindow v2.0.0 is the current stable release. Download the portable, self-contained `HiddenWindow.exe` from the [latest release](https://github.com/Maziyang2/HiddenWindow/releases/latest); no installer or separate .NET runtime is required.
 
 ## License
 
