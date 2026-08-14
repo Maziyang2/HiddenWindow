@@ -34,4 +34,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: src/HiddenWindow/bin/Release/net8.0-windows/win-x64/publish/HiddenWindow.exe
+          fail_on_unmatched_files: true
           generate_release_notes: true

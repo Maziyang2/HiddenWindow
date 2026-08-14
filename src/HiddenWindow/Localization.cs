@@ -45,12 +45,12 @@ internal static class Localization
             ["updateAvailable"] = ("发现新版本 {0}\n\n访问发布页面：\n{1}", "Version {0} is available.\n\nOpen the release page:\n{1}"),
             ["updateTitle"] = ("HiddenWindow 更新", "HiddenWindow Update"),
             ["updateFailed"] = ("检查更新失败，请稍后重试。", "Update check failed. Please try again later."),
-            ["aboutLead"] = ("为 Windows 打造的精致开源窗口编排工具。", "A refined open-source window orchestration layer for Windows."),
-            ["aboutBody"] = ("将暂时不用的窗口收纳到屏幕边缘，需要时自然滑回。简单、安静，并始终尊重你的工作流。", "Hide inactive windows at the screen edge and recall them naturally when needed. Minimal, quiet, and respectful of your workflow."),
+            ["aboutLead"] = ("为专注而生的开源窗口编排工具。", "An intentional open-source window orchestration layer for focused work."),
+            ["aboutBody"] = ("将暂时不用的窗口收进屏幕边缘，需要时自然唤回。以克制的设计、清晰的秩序和安静的交互，把注意力留给真正重要的内容。", "Move inactive windows to the screen edge and recall them naturally. Restrained design, clear order, and quiet interactions keep attention on what matters."),
             ["website"] = ("访问产品主页", "Visit product website"),
             ["openSource"] = ("开源 · MIT License · .NET 8", "Open source · MIT License · .NET 8"),
             ["statusActive"] = ("运行中", "ACTIVE"),
-            ["brandCaption"] = ("WINDOW ORCHESTRATION / V2.0", "WINDOW ORCHESTRATION / V2.0")
+            ["brandCaption"] = ("WINDOW ORCHESTRATION / V2.1", "WINDOW ORCHESTRATION / V2.1")
         };
 
     public static LanguageMode Mode { get; private set; } = LanguageMode.System;

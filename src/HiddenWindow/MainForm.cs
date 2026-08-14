@@ -197,7 +197,7 @@ internal sealed class MainForm : Form
             using var doc = JsonDocument.Parse(json);
             var tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
 
-            var currentVersion = typeof(MainForm).Assembly.GetName().Version ?? new Version(2, 0, 0);
+            var currentVersion = typeof(MainForm).Assembly.GetName().Version ?? new Version(2, 1, 0);
             var hasNewerVersion = Version.TryParse(tag.TrimStart('v', 'V'), out var latestVersion)
                 && latestVersion > currentVersion;
             if (hasNewerVersion)
