@@ -7,16 +7,17 @@ namespace HiddenWindow;
 
 internal static class UiTheme
 {
-    public static readonly Color Canvas = Color.FromArgb(12, 12, 13);
-    public static readonly Color Surface = Color.FromArgb(20, 20, 22);
-    public static readonly Color SurfaceRaised = Color.FromArgb(27, 27, 30);
-    public static readonly Color Line = Color.FromArgb(58, 58, 63);
-    public static readonly Color LineStrong = Color.FromArgb(92, 92, 98);
-    public static readonly Color Text = Color.FromArgb(244, 244, 246);
-    public static readonly Color TextMuted = Color.FromArgb(158, 158, 166);
-    public static readonly Color TextDim = Color.FromArgb(104, 104, 112);
-    public static readonly Color Accent = Color.FromArgb(238, 238, 242);
-    public static readonly Color AccentText = Color.FromArgb(13, 13, 15);
+    public static readonly Color Canvas = Color.FromArgb(247, 247, 244);
+    public static readonly Color Surface = Color.FromArgb(255, 255, 253);
+    public static readonly Color SurfaceRaised = Color.FromArgb(239, 239, 235);
+    public static readonly Color Line = Color.FromArgb(222, 222, 216);
+    public static readonly Color LineStrong = Color.FromArgb(176, 176, 169);
+    public static readonly Color Text = Color.FromArgb(24, 24, 23);
+    public static readonly Color TextMuted = Color.FromArgb(91, 91, 87);
+    public static readonly Color TextDim = Color.FromArgb(126, 126, 120);
+    public static readonly Color Accent = Color.FromArgb(24, 24, 23);
+    public static readonly Color AccentText = Color.FromArgb(255, 255, 253);
+    public static readonly Color Focus = Color.FromArgb(77, 99, 116);
 
     public static Font Font(float size, FontStyle style = FontStyle.Regular) =>
         new("Segoe UI Variable Text", size, style, GraphicsUnit.Point);
@@ -24,10 +25,10 @@ internal static class UiTheme
     public static Font DisplayFont(float size, FontStyle style = FontStyle.Bold) =>
         new("Segoe UI Variable Display", size, style, GraphicsUnit.Point);
 
-    public static void ApplyDarkTitleBar(Form form)
+    public static void ApplyTitleBar(Form form)
     {
         if (!OperatingSystem.IsWindows()) return;
-        var enabled = 1;
+        var enabled = 0;
         WinApi.DwmSetWindowAttribute(form.Handle, 20, ref enabled, sizeof(int));
         var cornerPreference = 2;
         WinApi.DwmSetWindowAttribute(form.Handle, 33, ref cornerPreference, sizeof(int));
@@ -49,15 +50,15 @@ internal sealed class BrandMarkControl : Control
 
         var scale = Math.Min(ClientSize.Width, ClientSize.Height) / 36f;
         e.Graphics.ScaleTransform(scale, scale);
-        using var framePen = new Pen(UiTheme.Text, 2.2f) { LineJoin = LineJoin.Miter };
-        using var detailPen = new Pen(UiTheme.TextMuted, 1.4f);
+        using var framePen = new Pen(UiTheme.Text, 1.5f) { LineJoin = LineJoin.Miter };
+        using var detailPen = new Pen(UiTheme.TextDim, 1f);
         using var fillBrush = new SolidBrush(UiTheme.Text);
 
         e.Graphics.DrawRectangle(framePen, 4, 4, 24, 24);
         e.Graphics.DrawLine(detailPen, 10, 10, 23, 10);
         e.Graphics.DrawLine(detailPen, 10, 15, 19, 15);
         e.Graphics.FillRectangle(fillBrush, 22, 19, 10, 10);
-        e.Graphics.DrawLine(framePen, 28, 7, 28, 17);
+        e.Graphics.DrawLine(detailPen, 28, 7, 28, 17);
     }
 }
 
@@ -73,7 +74,7 @@ internal sealed class ModernCard : Panel
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        using var pen = new Pen(UiTheme.Line);
+        using var pen = new Pen(UiTheme.Line, 1f);
         e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
     }
 }
@@ -132,16 +133,16 @@ internal sealed class ModernSlider : Control
         var ratio = (Value - Minimum) / (double)(Maximum - Minimum);
         var x = left + (int)Math.Round((right - left) * ratio);
 
-        using var trackPen = new Pen(UiTheme.LineStrong, 2f);
-        using var activePen = new Pen(UiTheme.Text, 2f);
-        using var knobBrush = new SolidBrush(Focused ? Color.White : UiTheme.Accent);
+        using var trackPen = new Pen(UiTheme.LineStrong, 1f);
+        using var activePen = new Pen(UiTheme.Text, 1.5f);
+        using var knobBrush = new SolidBrush(Focused ? UiTheme.Focus : UiTheme.Accent);
         e.Graphics.DrawLine(trackPen, left, y, right, y);
         e.Graphics.DrawLine(activePen, left, y, x, y);
-        e.Graphics.FillRectangle(knobBrush, x - 5, y - 5, 10, 10);
+        e.Graphics.FillRectangle(knobBrush, x - 4, y - 4, 8, 8);
         if (Focused)
         {
-            using var focusPen = new Pen(UiTheme.TextMuted);
-            e.Graphics.DrawRectangle(focusPen, x - 8, y - 8, 16, 16);
+            using var focusPen = new Pen(UiTheme.Focus);
+            e.Graphics.DrawRectangle(focusPen, x - 7, y - 7, 14, 14);
         }
     }
 
@@ -223,7 +224,7 @@ internal sealed class ModernToggle : CheckBox
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
         var track = new Rectangle(1, 3, Width - 2, Height - 6);
         using var trackBrush = new SolidBrush(Checked ? UiTheme.Accent : UiTheme.SurfaceRaised);
-        using var trackPen = new Pen(Checked ? UiTheme.Text : UiTheme.LineStrong);
+        using var trackPen = new Pen(Checked ? UiTheme.Accent : UiTheme.LineStrong);
         e.Graphics.FillRectangle(trackBrush, track);
         e.Graphics.DrawRectangle(trackPen, track);
         var knobX = Checked ? Width - 18 : 6;
@@ -234,8 +235,11 @@ internal sealed class ModernToggle : CheckBox
 
 internal sealed class ModernButton : Button
 {
+    private readonly bool _primary;
+
     public ModernButton(bool primary)
     {
+        _primary = primary;
         AutoSize = false;
         Height = 40;
         FlatStyle = FlatStyle.Flat;
@@ -246,6 +250,18 @@ internal sealed class ModernButton : Button
         Font = UiTheme.Font(9.5f, FontStyle.Bold);
         Cursor = Cursors.Hand;
         UseVisualStyleBackColor = false;
+        MouseEnter += (_, _) =>
+        {
+            if (_primary)
+                BackColor = Color.FromArgb(47, 47, 45);
+            else
+                FlatAppearance.BorderColor = UiTheme.TextMuted;
+        };
+        MouseLeave += (_, _) =>
+        {
+            BackColor = _primary ? UiTheme.Accent : UiTheme.Surface;
+            FlatAppearance.BorderColor = _primary ? UiTheme.Text : UiTheme.LineStrong;
+        };
     }
 }
 

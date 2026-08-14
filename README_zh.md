@@ -1,10 +1,10 @@
-# HiddenWindow v2.0
+# HiddenWindow v2.1
 
 [English README](./README.md) · [产品主页](https://github.maziyang.top) · [最新版本](https://github.com/Maziyang2/HiddenWindow/releases/latest)
 
 HiddenWindow 是一款为 Windows 打造的开源窗口编排工具：把暂时不用的窗口收进屏幕边缘，需要时自然唤回，让桌面保持安静、清晰和专注。
 
-![HiddenWindow v2 品牌封面](docs/brand/hiddenwindow-v2-social.png)
+![HiddenWindow v2.1 品牌封面](docs/brand/hiddenwindow-v2-social.png)
 
 ## 为什么需要 HiddenWindow
 
@@ -23,16 +23,17 @@ HiddenWindow 是一款为 Windows 打造的开源窗口编排工具：把暂时�
 - 可调整边缘灵敏度、可见宽度、动画时长和隐藏延迟
 - 支持开机自启、后台更新检查和单文件运行
 
-## v2.0 视觉与语言升级
+## v2.1 极简视觉与语言升级
 
-- 软件、官网、图标与文档使用统一的黑白灰设计系统
-- 新图标表达“窗口穿过屏幕边缘”的核心功能
-- 设置窗口、托盘菜单、关于页和边缘提示全面现代化
-- 界面边界更加清晰、硬朗，只使用少量毛玻璃层次
+- 软件、官网、浏览器图标与文档使用统一的亮色极简设计系统
+- 暖白纸面、近黑文字、稳定灰阶与极少量冷灰蓝焦点色
+- 通过网格、基线、排版层级和留白组织信息，不依赖复杂背景与重阴影
+- 设置窗口、托盘菜单、关于页和边缘提示使用一致的细线控件
+- 新图标继续表达“窗口穿过屏幕边缘”的核心功能
 - 默认根据 Windows 显示语言自动切换简体中文或 English
 - 支持手动选择“跟随系统 / 简体中文 / English”
 
-![HiddenWindow v2 中文官网](docs/screenshots/site-v2-zh.png)
+完整的 Minimalism 设计提示词范本已备份在 [English README](./README.md#minimalism-design-prompt-archive)，后续升级应保持其核心原则。
 
 ## 使用方式
 
@@ -61,7 +62,7 @@ dotnet publish .\src\HiddenWindow\HiddenWindow.csproj -c Release -r win-x64 --se
 
 ## 当前状态
 
-HiddenWindow v2.0.0 现已作为正式稳定版发布。请从[最新版本](https://github.com/Maziyang2/HiddenWindow/releases/latest)下载便携、自包含的 `HiddenWindow.exe`；无需安装，也无需单独配置 .NET 运行时。
+HiddenWindow v2.1.0 现已作为正式稳定版发布。请从[最新版本](https://github.com/Maziyang2/HiddenWindow/releases/latest)下载便携、自包含的 `HiddenWindow.exe`；无需安装，也无需单独配置 .NET 运行时。
 
 ## 许可证
 

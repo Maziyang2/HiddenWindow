@@ -127,7 +127,7 @@ internal sealed class SettingsForm : Form
         root.Controls.Add(BuildFooter(), 0, 2);
         Controls.Add(root);
 
-        Shown += (_, _) => UiTheme.ApplyDarkTitleBar(this);
+        Shown += (_, _) => UiTheme.ApplyTitleBar(this);
         Resize += (_, _) =>
         {
             var width = Math.Max(580, body.ClientSize.Width - body.Padding.Horizontal - 6);
@@ -376,7 +376,7 @@ internal sealed class SettingsForm : Form
         footer.Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "v2.0.0  /  github.maziyang.top",
+            Text = "v2.1.0  /  github.maziyang.top",
             ForeColor = UiTheme.TextDim,
             Font = UiTheme.Font(8f, FontStyle.Bold),
             Location = new Point(28, 28)

@@ -37,7 +37,7 @@ internal sealed class AboutForm : Form
         Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "VERSION 2.0.0 / OPEN SOURCE",
+            Text = "VERSION 2.1.0 / OPEN SOURCE",
             ForeColor = UiTheme.TextDim,
             Font = UiTheme.Font(8f, FontStyle.Bold),
             Location = new Point(122, 77)
@@ -83,7 +83,7 @@ internal sealed class AboutForm : Form
             Location = new Point(38, 392)
         });
 
-        Shown += (_, _) => UiTheme.ApplyDarkTitleBar(this);
+        Shown += (_, _) => UiTheme.ApplyTitleBar(this);
     }
 
     private static void OpenWebsite()
