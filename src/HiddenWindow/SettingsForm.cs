@@ -83,8 +83,7 @@ internal sealed class SettingsForm : Form
         {
             Width = 682,
             Height = 406,
-            Margin = new Padding(0, 0, 0, 16),
-            Anchor = AnchorStyles.Left | AnchorStyles.Right
+            Margin = new Padding(0, 0, 0, 16)
         };
         behaviorCard.Controls.Add(BuildSliderStack());
         behaviorCard.Controls.Add(BuildCardHeading("behavior", "behaviorHint"));
@@ -116,8 +115,7 @@ internal sealed class SettingsForm : Form
         {
             Width = 682,
             Height = 282,
-            Margin = new Padding(0),
-            Anchor = AnchorStyles.Left | AnchorStyles.Right
+            Margin = new Padding(0)
         };
         preferencesCard.Controls.Add(BuildPreferencesStack());
         preferencesCard.Controls.Add(BuildCardHeading("preferences", "languageHint"));
@@ -127,12 +125,21 @@ internal sealed class SettingsForm : Form
         root.Controls.Add(BuildFooter(), 0, 2);
         Controls.Add(root);
 
-        Shown += (_, _) => UiTheme.ApplyTitleBar(this);
-        Resize += (_, _) =>
+        // FlowLayoutPanel + AutoScroll 下 Anchor 拉伸会把卡片宽度解析为 0（v2.1 设置区空白的根因），
+        // 改为手动按可视宽度同步卡片宽度；ClientSizeChanged 覆盖滚动条出现引起的宽度变化
+        void SyncCardWidths()
         {
             var width = Math.Max(580, body.ClientSize.Width - body.Padding.Horizontal - 6);
             behaviorCard.Width = width;
             preferencesCard.Width = width;
+        }
+        SyncCardWidths();
+        body.ClientSizeChanged += (_, _) => SyncCardWidths();
+        Resize += (_, _) => SyncCardWidths();
+        Shown += (_, _) =>
+        {
+            UiTheme.ApplyTitleBar(this);
+            SyncCardWidths();
         };
     }
 
@@ -232,7 +239,8 @@ internal sealed class SettingsForm : Form
         var stack = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(0, 70, 0, 0),
+            // 标题区(Dock.Top 70)已占据空间，这里不再重复预留，否则滑块行被压缩裁剪
+            Padding = new Padding(0, 2, 0, 2),
             BackColor = UiTheme.Surface,
             ColumnCount = 1,
             RowCount = 4
@@ -284,7 +292,8 @@ internal sealed class SettingsForm : Form
             Location = new Point(0, 39)
         });
         slider.Dock = DockStyle.Fill;
-        slider.Margin = new Padding(12, 29, 12, 18);
+        // 上下留白收窄，确保 73px 行高内完整显示 30px 滑轨（此前 29+30+18=77px 溢出被裁）
+        slider.Margin = new Padding(12, 20, 12, 14);
         valueLabel.Dock = DockStyle.Fill;
         valueLabel.Margin = Padding.Empty;
         row.Controls.Add(copyPanel, 0, 0);
@@ -298,7 +307,7 @@ internal sealed class SettingsForm : Form
         var stack = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(0, 70, 0, 0),
+            Padding = new Padding(0, 2, 0, 2),
             BackColor = UiTheme.Surface,
             ColumnCount = 1,
             RowCount = 3
@@ -366,7 +375,8 @@ internal sealed class SettingsForm : Form
         {
             Dock = DockStyle.Fill,
             BackColor = UiTheme.Canvas,
-            Padding = new Padding(28, 16, 28, 16)
+            // 底部行实际分配 68px，上下 padding 收窄到 12 保证 40px 按钮完整显示
+            Padding = new Padding(28, 12, 28, 12)
         };
         footer.Paint += (_, e) =>
         {
