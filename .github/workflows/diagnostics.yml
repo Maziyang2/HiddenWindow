@@ -44,8 +44,9 @@ jobs:
         shell: pwsh
         run: |
           $exe = "src/HiddenWindow/bin/Release/net8.0-windows/win-x64/publish/HiddenWindow.exe"
-          & $exe --diag
-          if ($LASTEXITCODE -ne 0) { Write-Host "exit code: $LASTEXITCODE" }
+          # GUI 程序必须用 Start-Process -Wait，否则 shell 立即返回导致收集时序错误
+          $p = Start-Process -FilePath $exe -ArgumentList "--diag" -Wait -PassThru
+          Write-Host "exit code: $($p.ExitCode)"
           Move-Item hw-diag hw-diag-singlefile
 
       - name: Upload artifacts
