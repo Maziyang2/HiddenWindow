@@ -1,0 +1,58 @@
+name: Runtime Diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'diag/**'
+
+permissions:
+  contents: read
+
+jobs:
+  diag:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build (framework-dependent)
+        run: dotnet build src/HiddenWindow/HiddenWindow.csproj -c Release
+
+      - name: Run diagnostics (dll)
+        shell: pwsh
+        run: |
+          dotnet src/HiddenWindow/bin/Release/net8.0-windows/HiddenWindow.dll --diag
+          Move-Item hw-diag hw-diag-dll
+
+      - name: Publish single-file (user-facing shape)
+        run: >
+          dotnet publish src/HiddenWindow/HiddenWindow.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+
+      - name: Run diagnostics (single-file exe)
+        shell: pwsh
+        run: |
+          $exe = "src/HiddenWindow/bin/Release/net8.0-windows/win-x64/publish/HiddenWindow.exe"
+          & $exe --diag
+          if ($LASTEXITCODE -ne 0) { Write-Host "exit code: $LASTEXITCODE" }
+          Move-Item hw-diag hw-diag-singlefile
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hw-diag
+          path: |
+            hw-diag-dll/**
+            hw-diag-singlefile/**
+          if-no-files-found: error
