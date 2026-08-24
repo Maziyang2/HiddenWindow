@@ -36,10 +36,11 @@ app_ico = ROOT / "src/HiddenWindow/Assets/HiddenWindow.ico"
 
 image.save(brand_png)
 image.resize((256, 256), Image.Resampling.LANCZOS).save(app_png)
-image.save(app_ico, format="ICO", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+# bitmap_format="bmp"：ExtractIconEx/ExtractAssociatedIcon 等 Win32 API 不解析 PNG 条目
+image.save(app_ico, format="ICO", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)], bitmap_format="bmp")
 
 if SITE_ROOT is not None:
     public = SITE_ROOT / "public"
     public.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(brand_png, public / "icon.png")
-    image.save(public / "favicon.ico", format="ICO", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64)])
+    image.save(public / "favicon.ico", format="ICO", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64)], bitmap_format="bmp")
