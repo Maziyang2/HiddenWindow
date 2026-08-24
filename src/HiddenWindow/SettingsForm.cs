@@ -386,7 +386,7 @@ internal sealed class SettingsForm : Form
         footer.Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "v2.1.0  /  github.maziyang.top",
+            Text = "v2.1.1  /  github.maziyang.top",
             ForeColor = UiTheme.TextDim,
             Font = UiTheme.Font(8f, FontStyle.Bold),
             Location = new Point(28, 28)

@@ -37,7 +37,7 @@ internal sealed class AboutForm : Form
         Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "VERSION 2.1.0 / OPEN SOURCE",
+            Text = "VERSION 2.1.1 / OPEN SOURCE",
             ForeColor = UiTheme.TextDim,
             Font = UiTheme.Font(8f, FontStyle.Bold),
             Location = new Point(122, 77)
