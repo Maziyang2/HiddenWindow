@@ -19,11 +19,39 @@ internal static class UiTheme
     public static readonly Color AccentText = Color.FromArgb(255, 255, 253);
     public static readonly Color Focus = Color.FromArgb(77, 99, 116);
 
+    private static readonly string TextFontFamily = ResolveFontFamily("Segoe UI Variable Text");
+    private static readonly string DisplayFontFamily = ResolveFontFamily("Segoe UI Variable Display");
+
     public static Font Font(float size, FontStyle style = FontStyle.Regular) =>
-        new("Segoe UI Variable Text", size, style, GraphicsUnit.Point);
+        new(TextFontFamily, size, style, GraphicsUnit.Point);
 
     public static Font DisplayFont(float size, FontStyle style = FontStyle.Bold) =>
-        new("Segoe UI Variable Display", size, style, GraphicsUnit.Point);
+        new(DisplayFontFamily, size, style, GraphicsUnit.Point);
+
+    /// <summary>
+    /// "Segoe UI Variable" 只在 Windows 11 上提供；Windows 10 上回退到 "Segoe UI"，
+    /// 避免 GDI+ 静默替换为默认字体导致整个界面的排版偏移。
+    /// </summary>
+    private static string ResolveFontFamily(string preferred)
+    {
+        const string fallback = "Segoe UI";
+        try
+        {
+            foreach (var family in FontFamily.Families)
+            {
+                if (string.Equals(family.Name, preferred, StringComparison.OrdinalIgnoreCase))
+                {
+                    return preferred;
+                }
+            }
+        }
+        catch
+        {
+            // 字体枚举失败时使用回退字体
+        }
+
+        return fallback;
+    }
 
     public static void ApplyTitleBar(Form form)
     {

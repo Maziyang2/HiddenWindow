@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+using HiddenWindow.Core;
 
 namespace HiddenWindow;
 
@@ -8,22 +9,22 @@ internal static class WinApi
 {
     [DllImport("dwmapi.dll")]
     internal static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int valueSize);
+
     public const uint EVENT_SYSTEM_MOVESIZESTART = 0x000A;
     public const uint EVENT_SYSTEM_MOVESIZEEND = 0x000B;
-    public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
-    public const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
     public const uint WINEVENT_OUTOFCONTEXT = 0x0000;
 
     public const int GWL_EXSTYLE = -20;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
-    public const int WS_EX_LAYERED = 0x00080000;
-    public const int WS_EX_TRANSPARENT = 0x00000020;
 
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_SHOWWINDOW = 0x0040;
+
+    public const uint MONITOR_DEFAULTTOPRIMARY = 0x00000001;
+    public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
     public const int VK_LBUTTON = 0x01;
     public const int VK_H = 0x48;
@@ -45,34 +46,6 @@ internal static class WinApi
         int idChild,
         uint dwEventThread,
         uint dwmsEventTime);
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-
-        public int Width => Right - Left;
-        public int Height => Bottom - Top;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct MONITORINFO
-    {
-        public int cbSize;
-        public RECT rcMonitor;
-        public RECT rcWork;
-        public uint dwFlags;
-    }
 
     [DllImport("user32.dll")]
     public static extern IntPtr SetWinEventHook(
@@ -116,6 +89,15 @@ internal static class WinApi
     public static extern bool SetForegroundWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
     public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
     [DllImport("user32.dll")]
@@ -136,10 +118,25 @@ internal static class WinApi
     [DllImport("user32.dll")]
     public static extern short GetAsyncKeyState(int vKey);
 
+    /// <summary>
+    /// 获取显示器信息：句柄无效或调用失败时回退主显示器，
+    /// 避免返回全零矩形把窗口移动到 (0,0)。
+    /// </summary>
     public static MONITORINFO GetMonitorInfoSafe(IntPtr monitor)
     {
         var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
-        GetMonitorInfo(monitor, ref mi);
+        if (monitor != IntPtr.Zero && GetMonitorInfo(monitor, ref mi))
+        {
+            return mi;
+        }
+
+        var primary = MonitorFromPoint(default, MONITOR_DEFAULTTOPRIMARY);
+        var fallback = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (primary != IntPtr.Zero && GetMonitorInfo(primary, ref fallback))
+        {
+            return fallback;
+        }
+
         return mi;
     }
 

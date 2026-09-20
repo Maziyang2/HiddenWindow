@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using HiddenWindow.Core;
 
 namespace HiddenWindow;
 
@@ -11,7 +12,6 @@ internal static class Localization
         {
             ["settings"] = ("设置", "Settings"),
             ["settingsTitle"] = ("HiddenWindow 设置", "HiddenWindow Settings"),
-            ["settingsSubtitle"] = ("让窗口退到边缘，让注意力回到中心。", "Move windows to the edge. Bring focus back to the center."),
             ["behavior"] = ("窗口行为", "Window behavior"),
             ["behaviorHint"] = ("精细控制吸附触发、露出宽度与动画节奏。", "Tune edge detection, reveal width, and motion timing."),
             ["edgeSensitivity"] = ("边缘检测灵敏度", "Edge sensitivity"),
@@ -45,6 +45,10 @@ internal static class Localization
             ["updateAvailable"] = ("发现新版本 {0}\n\n访问发布页面：\n{1}", "Version {0} is available.\n\nOpen the release page:\n{1}"),
             ["updateTitle"] = ("HiddenWindow 更新", "HiddenWindow Update"),
             ["updateFailed"] = ("检查更新失败，请稍后重试。", "Update check failed. Please try again later."),
+            ["alreadyRunning"] = ("HiddenWindow 已在运行。", "HiddenWindow is already running."),
+            ["hotkeyFailed"] = ("全局快捷键注册失败，可能已被其他程序占用。", "The global shortcut could not be registered — another app may be using it."),
+            ["autoStartFailed"] = ("开机自启设置失败，请检查系统权限。", "The startup setting could not be saved. Check system permissions."),
+            ["unexpectedError"] = ("发生未预期的错误：", "An unexpected error occurred:"),
             ["aboutLead"] = ("为专注而生的开源窗口编排工具。", "An intentional open-source window orchestration layer for focused work."),
             ["aboutBody"] = ("将暂时不用的窗口收进屏幕边缘，需要时自然唤回。以克制的设计、清晰的秩序和安静的交互，把注意力留给真正重要的内容。", "Move inactive windows to the screen edge and recall them naturally. Restrained design, clear order, and quiet interactions keep attention on what matters."),
             ["website"] = ("访问产品主页", "Visit product website"),

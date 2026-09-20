@@ -7,10 +7,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>Assets\HiddenWindow.ico</ApplicationIcon>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- 多显示器不同缩放时按显示器重新布局，避免界面被系统位图拉伸发虚 -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <Version>2.1.1</Version>
     <AssemblyVersion>2.1.1.0</AssemblyVersion>
     <FileVersion>2.1.1.0</FileVersion>
     <Product>HiddenWindow</Product>
     <Description>A refined open-source window orchestration layer for Windows.</Description>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HiddenWindow.Core\HiddenWindow.Core.csproj" />
+  </ItemGroup>
 </Project>

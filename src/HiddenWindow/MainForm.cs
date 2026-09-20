@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using HiddenWindow.Core;
 using Microsoft.Win32;
 
 namespace HiddenWindow;
@@ -17,14 +18,14 @@ internal sealed class MainForm : Form
 
     private const string AutoStartRegPath = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
     private const string AutoStartValueName = "HiddenWindow";
-    private const string GitHubApiUrl = "https://api.github.com/repos/Maziyang2/HiddenWindow/releases/latest";
+    private const string GitHubApiUrl = "https://api.github.com/repos/" + AppInfo.RepositorySlug + "/releases/latest";
 
     // v1.4: 托盘菜单项引用，用于设置关闭后刷新文本
     private ToolStripMenuItem? _pauseMenuItem;
 
     public MainForm()
     {
-        Text = "HiddenWindow";
+        Text = AppInfo.Name;
         ShowInTaskbar = false;
         WindowState = FormWindowState.Minimized;
         Opacity = 0;
@@ -43,7 +44,7 @@ internal sealed class MainForm : Form
         {
             Icon = trayIcon,
             Visible = true,
-            Text = "HiddenWindow"
+            Text = AppInfo.Name
         };
 
         _notifyIcon.ContextMenuStrip = BuildMenu();
@@ -55,11 +56,13 @@ internal sealed class MainForm : Form
         Hide();
 
         // 注册全局热键
-        if (_settings.HotkeyEnabled)
-            RegisterHotkey();
+        if (_settings.HotkeyEnabled && !RegisterHotkey())
+        {
+            Notify(Localization.Get("hotkeyFailed"), ToolTipIcon.Warning);
+        }
 
         // 后台检查更新
-        Task.Run(() => CheckForUpdate(manual: false));
+        _ = CheckForUpdate(manual: false);
     }
 
     protected override void WndProc(ref Message m)
@@ -78,6 +81,7 @@ internal sealed class MainForm : Form
         _notifyIcon.Visible = false;
         _notifyIcon.Dispose();
         _dockManager.Dispose();
+        _hintForm.Dispose();
         base.OnFormClosing(e);
     }
 
@@ -138,17 +142,32 @@ internal sealed class MainForm : Form
     {
         var form = new SettingsForm(_settings, updatedSettings =>
         {
-            _settings.PauseDocking = false;
+            // 保存设置视为恢复吸附：内存与配置文件一起更新，避免重启后状态不一致
             _dockManager.IsPaused = false;
+            if (_settings.PauseDocking)
+            {
+                _settings.PauseDocking = false;
+                _settings.Save();
+            }
+
             _dockManager.UpdateSettings(updatedSettings);
 
             // 同步开机自启到注册表（v1.4: 托盘菜单已移除该项，统一在设置中管理）
-            SetAutoStart(updatedSettings.AutoStart);
+            if (updatedSettings.AutoStart && !SetAutoStart(enabled: true))
+            {
+                Notify(Localization.Get("autoStartFailed"), ToolTipIcon.Warning);
+            }
+            else
+            {
+                SetAutoStart(updatedSettings.AutoStart);
+            }
 
             // 热键状态变更
             UnregisterHotkey();
-            if (updatedSettings.HotkeyEnabled)
-                RegisterHotkey();
+            if (updatedSettings.HotkeyEnabled && !RegisterHotkey())
+            {
+                Notify(Localization.Get("hotkeyFailed"), ToolTipIcon.Warning);
+            }
 
             Localization.Configure(updatedSettings.Language);
             var oldMenu = _notifyIcon.ContextMenuStrip;
@@ -171,48 +190,47 @@ internal sealed class MainForm : Form
         _settings.Save();
 
         var msg = _dockManager.IsPaused ? Localization.Get("paused") : Localization.Get("resumed");
-        _notifyIcon.ShowBalloonTip(1500, "HiddenWindow", msg, ToolTipIcon.Info);
+        Notify(msg);
     }
 
-    private void RegisterHotkey()
-    {
+    private bool RegisterHotkey() =>
         WinApi.RegisterHotKey(Handle, WinApi.HOTKEY_ID_PAUSE,
             WinApi.MOD_CONTROL | WinApi.MOD_ALT | WinApi.MOD_NOREPEAT,
             WinApi.VK_H);
-    }
 
-    private void UnregisterHotkey()
-    {
+    private void UnregisterHotkey() =>
         WinApi.UnregisterHotKey(Handle, WinApi.HOTKEY_ID_PAUSE);
-    }
+
+    private void Notify(string message, ToolTipIcon icon = ToolTipIcon.Info) =>
+        _notifyIcon.ShowBalloonTip(3000, AppInfo.Name, message, icon);
 
     // v1.4: 增加 manual 参数 — 手动检查时网络异常弹出提示；增加 HttpClient 超时
-    private static async Task CheckForUpdate(bool manual = false)
+    // 网络请求在线程池执行，弹窗始终回到 UI 线程
+    private static async Task CheckForUpdate(bool manual)
     {
+        string? tag = null;
+        string? url = null;
+        var failed = false;
+
         try
         {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("HiddenWindow");
-            var json = await client.GetStringAsync(GitHubApiUrl);
-            using var doc = JsonDocument.Parse(json);
-            var tag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
-
-            var currentVersion = typeof(MainForm).Assembly.GetName().Version ?? new Version(2, 1, 1);
-            var hasNewerVersion = Version.TryParse(tag.TrimStart('v', 'V'), out var latestVersion)
-                && latestVersion > currentVersion;
-            if (hasNewerVersion)
+            (tag, url) = await Task.Run(async () =>
             {
-                var url = doc.RootElement.GetProperty("html_url").GetString();
-                MessageBox.Show(string.Format(Localization.Get("updateAvailable"), tag, url),
-                    Localization.Get("updateTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            else if (manual)
-            {
-                MessageBox.Show(Localization.Get("latest"), Localization.Get("checkUpdates"),
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(AppInfo.Name);
+                var json = await client.GetStringAsync(GitHubApiUrl).ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(json);
+                var latestTag = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
+                var releaseUrl = doc.RootElement.TryGetProperty("html_url", out var html) ? html.GetString() : null;
+                return (latestTag, releaseUrl);
+            });
         }
         catch
+        {
+            failed = true;
+        }
+
+        if (failed)
         {
             if (manual)
             {
@@ -220,22 +238,51 @@ internal sealed class MainForm : Form
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             // 后台检查时静默忽略
+            return;
+        }
+
+        var currentVersion = typeof(MainForm).Assembly.GetName().Version ?? new Version(0, 0, 0);
+        var hasNewerVersion = Version.TryParse(tag?.TrimStart('v', 'V'), out var latestVersion)
+            && latestVersion > currentVersion;
+
+        if (hasNewerVersion)
+        {
+            MessageBox.Show(string.Format(Localization.Get("updateAvailable"), tag, url),
+                Localization.Get("updateTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        else if (manual)
+        {
+            MessageBox.Show(Localization.Get("latest"), Localization.Get("checkUpdates"),
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 
-    private static void SetAutoStart(bool enabled)
+    /// <summary>写入/移除开机自启项；失败时返回 false（注册表可能被安全软件锁定）。</summary>
+    private static bool SetAutoStart(bool enabled)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(AutoStartRegPath);
-        if (key == null) return;
+        try
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(AutoStartRegPath);
+            if (key == null)
+            {
+                return false;
+            }
 
-        if (enabled)
-        {
-            var exePath = Application.ExecutablePath;
-            key.SetValue(AutoStartValueName, $"\"{exePath}\"");
+            if (enabled)
+            {
+                var exePath = Application.ExecutablePath;
+                key.SetValue(AutoStartValueName, $"\"{exePath}\"");
+            }
+            else
+            {
+                key.DeleteValue(AutoStartValueName, false);
+            }
+
+            return true;
         }
-        else
+        catch
         {
-            key.DeleteValue(AutoStartValueName, false);
+            return false;
         }
     }
 }
