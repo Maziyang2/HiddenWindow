@@ -137,7 +137,7 @@ v2.1 以极简主义重新统一软件、官网、浏览器图标和文档：亮
 
 ## Status
 
-HiddenWindow v2.1.1 is the current stable release. Download the portable, self-contained `HiddenWindow.exe` from the [latest release](https://github.com/Maziyang2/HiddenWindow/releases/latest); no installer or separate .NET runtime is required.
+HiddenWindow v2.1.2 is the current stable release. Download the portable, self-contained `HiddenWindow.exe` from the [latest release](https://github.com/Maziyang2/HiddenWindow/releases/latest); no installer or separate .NET runtime is required.
 
 ## License
 

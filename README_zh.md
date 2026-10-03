@@ -68,7 +68,7 @@ dotnet publish .\src\HiddenWindow\HiddenWindow.csproj -c Release -r win-x64 --se
 
 ## 当前状态
 
-HiddenWindow v2.1.1 现已作为正式稳定版发布。请从[最新版本](https://github.com/Maziyang2/HiddenWindow/releases/latest)下载便携、自包含的 `HiddenWindow.exe`；无需安装，也无需单独配置 .NET 运行时。
+HiddenWindow v2.1.2 现已作为正式稳定版发布。请从[最新版本](https://github.com/Maziyang2/HiddenWindow/releases/latest)下载便携、自包含的 `HiddenWindow.exe`；无需安装，也无需单独配置 .NET 运行时。
 
 ## 许可证
 
