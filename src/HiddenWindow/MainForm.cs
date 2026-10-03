@@ -153,13 +153,9 @@ internal sealed class MainForm : Form
             _dockManager.UpdateSettings(updatedSettings);
 
             // 同步开机自启到注册表（v1.4: 托盘菜单已移除该项，统一在设置中管理）
-            if (updatedSettings.AutoStart && !SetAutoStart(enabled: true))
+            if (!SetAutoStart(updatedSettings.AutoStart))
             {
                 Notify(Localization.Get("autoStartFailed"), ToolTipIcon.Warning);
-            }
-            else
-            {
-                SetAutoStart(updatedSettings.AutoStart);
             }
 
             // 热键状态变更

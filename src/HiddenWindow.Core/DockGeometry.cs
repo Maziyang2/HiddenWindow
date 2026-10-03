@@ -75,6 +75,14 @@ public static class DockGeometry
         return new RECT { Left = shown.Left, Top = yBottom, Right = shown.Right, Bottom = yBottom + shown.Height };
     }
 
+    /// <summary>按新的显示器边界重算可见位置和隐藏位置。</summary>
+    public static (RECT ShownRect, RECT HiddenRect) RebaseToMonitor(
+        RECT shownRect, RECT monitor, DockEdge edge, int visiblePx)
+    {
+        var rebasedShown = SnapToEdge(shownRect, monitor, edge);
+        return (rebasedShown, HiddenRect(rebasedShown, monitor, edge, visiblePx));
+    }
+
     /// <summary>判断窗口是否靠近某条边缘，返回距离最近的一条。</summary>
     public static bool TryGetDockEdge(RECT rect, RECT monitor, int sensitivity, out DockEdge edge)
     {

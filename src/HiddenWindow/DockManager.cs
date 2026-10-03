@@ -15,7 +15,6 @@ internal sealed class DockedWindow
     public DockEdge Edge { get; set; }
     public RECT ShownRect { get; set; }
     public RECT HiddenRect { get; set; }
-    public RECT LastKnownRect { get; set; }
     public MONITORINFO Monitor { get; set; }
     public bool IsHidden { get; set; }
     public DateTime LastShownUtc { get; set; }
@@ -180,16 +179,18 @@ internal sealed class DockManager : IDisposable
             return;
         }
 
-        docked.LastKnownRect = docked.HiddenRect;
     }
 
     /// <summary>停止跟踪某个窗口；若它正停在隐藏位置，先移回可见位置，避免窗口"找不回来"。</summary>
     private void Forget(DockedWindow docked, bool restoreIfHidden)
     {
+        var shouldRestore = DockWindowState.ShouldRestoreOnForget(
+            restoreIfHidden, docked.IsHidden, docked.IsAnimating);
+
         _docked.Remove(docked.Hwnd);
         CancelAnimation(docked, snapToTarget: false);
 
-        if (restoreIfHidden && docked.IsHidden)
+        if (shouldRestore)
         {
             MoveWindow(docked.Hwnd, docked.ShownRect);
         }
@@ -232,26 +233,39 @@ internal sealed class DockManager : IDisposable
                 continue;
             }
 
-            // 仅在窗口矩形变化时重新解析所在显示器
-            if (RectChanged(currentRect, docked.LastKnownRect))
-            {
-                docked.LastKnownRect = currentRect;
-                docked.Monitor = WinApi.GetMonitorInfoSafe(
-                    WinApi.MonitorFromWindow(docked.Hwnd, WinApi.MONITOR_DEFAULTTONEAREST));
-            }
-
-            // 停靠之后窗口被最小化：取消跟踪并把窗口移回可见位置
+            // 最小化、最大化的窗口无需刷新显示器布局。
             if (WinApi.IsIconic(docked.Hwnd))
             {
                 Forget(docked, restoreIfHidden: true);
                 continue;
             }
 
-            // 停靠之后窗口被最大化或进入全屏：不再属于停靠窗口（窗口本身仍在屏幕上）
-            if (WinApi.IsZoomed(docked.Hwnd) || DockGeometry.IsFullscreen(currentRect, docked.Monitor.rcMonitor))
+            if (WinApi.IsZoomed(docked.Hwnd))
             {
                 Forget(docked, restoreIfHidden: false);
                 continue;
+            }
+
+            var currentMonitor = WinApi.GetMonitorInfoSafe(
+                WinApi.MonitorFromWindow(docked.Hwnd, WinApi.MONITOR_DEFAULTTONEAREST));
+
+            // 先用最新显示器边界识别全屏，再处理停靠窗口的几何重定位。
+            if (DockGeometry.IsFullscreen(currentRect, currentMonitor.rcMonitor))
+            {
+                Forget(docked, restoreIfHidden: false);
+                continue;
+            }
+
+            if (RectChanged(docked.Monitor.rcMonitor, currentMonitor.rcMonitor))
+            {
+                if (!RefreshMonitorBounds(docked, currentMonitor, out currentRect))
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                docked.Monitor = currentMonitor;
             }
 
             var isInTriggerZone = DockGeometry.IsCursorInEdgeZone(
@@ -445,6 +459,38 @@ internal sealed class DockManager : IDisposable
         const int tolerance = 8;
         return Math.Abs(actual.Left - rect.Left) <= tolerance
             && Math.Abs(actual.Top - rect.Top) <= tolerance;
+    }
+
+    /// <summary>显示器布局变化后，把停靠窗口和两个动画端点一起移到新边界。</summary>
+    private bool RefreshMonitorBounds(DockedWindow docked, MONITORINFO monitor, out RECT currentRect)
+    {
+        var animationTargetsHidden = docked.IsAnimating
+            && RectChanged(docked.AnimationTarget, docked.ShownRect);
+        var shouldBeHidden = DockWindowState.IsHiddenAtAnimationTarget(
+            docked.IsHidden, docked.IsAnimating, animationTargetsHidden);
+
+        CancelAnimation(docked, snapToTarget: false);
+        docked.Monitor = monitor;
+
+        var targets = DockGeometry.RebaseToMonitor(
+            docked.ShownRect, monitor.rcMonitor, docked.Edge, _settings.VisibleEdgePx);
+        docked.ShownRect = targets.ShownRect;
+        docked.HiddenRect = targets.HiddenRect;
+        docked.IsHidden = shouldBeHidden;
+        docked.WasCursorInTriggerZone = false;
+
+        var target = shouldBeHidden ? docked.HiddenRect : docked.ShownRect;
+        if (TryMoveWindow(docked.Hwnd, target)
+            && WinApi.GetWindowRect(docked.Hwnd, out currentRect))
+        {
+            return true;
+        }
+
+        // 若系统拒绝按新布局移动，尽力恢复到可见位置后停止跟踪。
+        MoveWindow(docked.Hwnd, docked.ShownRect);
+        _docked.Remove(docked.Hwnd);
+        currentRect = default;
+        return false;
     }
 
     private static bool RectChanged(RECT a, RECT b)

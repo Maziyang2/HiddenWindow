@@ -141,5 +141,20 @@ public class DockGeometryTests
         Assert.True(DockGeometry.PointInRect(new POINT { X = 10, Y = 20 }, rect));
         Assert.True(DockGeometry.PointInRect(new POINT { X = 100, Y = 200 }, rect));
         Assert.False(DockGeometry.PointInRect(new POINT { X = 9, Y = 50 }, rect));
+    }    
+    [Fact]
+    public void RebaseToMonitor_UpdatesBothTargetsWhenDisplayBoundsChange()
+    {
+        var oldMonitor = Rect(0, 0, 1920, 1080);
+        var newMonitor = Rect(0, 0, 2560, 1080);
+        var oldShown = Rect(920, 100, 1920, 700);
+
+        var targets = DockGeometry.RebaseToMonitor(oldShown, newMonitor, DockEdge.Right, visiblePx: 5);
+
+        Assert.Equal(1560, targets.ShownRect.Left);
+        Assert.Equal(2560, targets.ShownRect.Right);
+        Assert.Equal(2555, targets.HiddenRect.Left);
+        Assert.Equal(3555, targets.HiddenRect.Right);
+        Assert.NotEqual(oldMonitor.Right, targets.ShownRect.Right);
     }
 }
