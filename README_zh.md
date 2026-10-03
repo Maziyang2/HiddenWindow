@@ -33,12 +33,12 @@ HiddenWindow 是一款为 Windows 打造的开源窗口编排工具：把暂时�
 - 默认根据 Windows 显示语言自动切换简体中文或 English
 - 支持手动选择“跟随系统 / 简体中文 / English”
 
-完整的 Minimalism 设计提示词范本已备份在 [English README](./README.md#minimalism-design-prompt-archive)，后续升级应保持其核心原则。
+完整的 Minimalism 设计纲领已归档在 [docs/design.md](./docs/design.md)，后续升级应保持其核心原则。
 
 ## 使用方式
 
 1. 从 [Releases](https://github.com/Maziyang2/HiddenWindow/releases/latest) 下载 `HiddenWindow.exe`。
-2. 直接运行，无需安装。
+2. 直接运行，无需安装。重复启动会提示已在运行——HiddenWindow 以单实例方式工作。
 3. 右键托盘图标进入“设置”。
 4. 把普通窗口拖到任意屏幕边缘。
 5. 鼠标靠近对应边缘即可唤回。
@@ -54,6 +54,12 @@ HiddenWindow 是一款为 Windows 打造的开源窗口编排工具：把暂时�
 dotnet build .\src\HiddenWindow\HiddenWindow.csproj -c Release
 ```
 
+运行核心单元测试（停靠几何、提示窗定位、缓动、设置读写）：
+
+```powershell
+dotnet test .\tests\HiddenWindow.Tests\HiddenWindow.Tests.csproj -c Release
+```
+
 发布单文件版本：
 
 ```powershell
@@ -62,7 +68,7 @@ dotnet publish .\src\HiddenWindow\HiddenWindow.csproj -c Release -r win-x64 --se
 
 ## 当前状态
 
-HiddenWindow v2.1.0 现已作为正式稳定版发布。请从[最新版本](https://github.com/Maziyang2/HiddenWindow/releases/latest)下载便携、自包含的 `HiddenWindow.exe`；无需安装，也无需单独配置 .NET 运行时。
+HiddenWindow v2.1.1 现已作为正式稳定版发布。请从[最新版本](https://github.com/Maziyang2/HiddenWindow/releases/latest)下载便携、自包含的 `HiddenWindow.exe`；无需安装，也无需单独配置 .NET 运行时。
 
 ## 许可证
 

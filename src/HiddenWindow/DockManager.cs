@@ -4,29 +4,27 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using HiddenWindow.Core;
 using FormsTimer = System.Windows.Forms.Timer;
 
 namespace HiddenWindow;
-
-internal enum DockEdge
-{
-    Left,
-    Right,
-    Top,
-    Bottom
-}
 
 internal sealed class DockedWindow
 {
     public IntPtr Hwnd { get; }
     public DockEdge Edge { get; set; }
-    public WinApi.RECT ShownRect { get; set; }
-    public WinApi.RECT HiddenRect { get; set; }
-    public WinApi.MONITORINFO Monitor { get; set; }
+    public RECT ShownRect { get; set; }
+    public RECT HiddenRect { get; set; }
+    public MONITORINFO Monitor { get; set; }
     public bool IsHidden { get; set; }
     public DateTime LastShownUtc { get; set; }
     public bool IsAnimating { get; set; }
     public bool WasCursorInTriggerZone { get; set; }
+
+    // 进行中的动画状态：允许被取消（设置变更 / 用户开始拖动 / 退出）
+    public FormsTimer? AnimationTimer { get; set; }
+    public RECT AnimationTarget { get; set; }
+    public Action? AnimationCompleted { get; set; }
 
     public DockedWindow(IntPtr hwnd)
     {
@@ -64,20 +62,16 @@ internal sealed class DockManager : IDisposable
     public void UpdateSettings(AppSettings settings)
     {
         _settings = settings;
-        foreach (var docked in _docked.Values)
+        foreach (var docked in _docked.Values.ToList())
         {
-            // v1.4: 跳过正在动画中的窗口，防止动画被粗暴打断
-            if (docked.IsAnimating) continue;
+            // 设置变更立即生效：先结束进行中的动画（落到原目标位置），再按新设置重算
+            CancelAnimation(docked, snapToTarget: true);
 
-            RecalculateRects(docked);
-            if (docked.IsHidden)
-            {
-                MoveWindow(docked.Hwnd, docked.HiddenRect);
-            }
-            else
-            {
-                MoveWindow(docked.Hwnd, docked.ShownRect);
-            }
+            docked.ShownRect = DockGeometry.SnapToEdge(docked.ShownRect, docked.Monitor.rcMonitor, docked.Edge);
+            docked.HiddenRect = DockGeometry.HiddenRect(
+                docked.ShownRect, docked.Monitor.rcMonitor, docked.Edge, _settings.VisibleEdgePx);
+
+            MoveWindow(docked.Hwnd, docked.IsHidden ? docked.HiddenRect : docked.ShownRect);
         }
     }
 
@@ -119,10 +113,12 @@ internal sealed class DockManager : IDisposable
 
         if (eventType == WinApi.EVENT_SYSTEM_MOVESIZESTART)
         {
-            if (_docked.TryGetValue(hwnd, out var docked))
+            if (_docked.TryGetValue(hwnd, out var dragging))
             {
-                docked.IsHidden = false;
-                MoveWindow(hwnd, docked.ShownRect);
+                // 用户开始拖动：立即结束动画，避免动画和拖动互相拉扯
+                CancelAnimation(dragging, snapToTarget: false);
+                dragging.IsHidden = false;
+                MoveWindow(hwnd, dragging.ShownRect);
             }
             return;
         }
@@ -134,9 +130,9 @@ internal sealed class DockManager : IDisposable
 
         if (!IsEligibleWindow(hwnd))
         {
-            if (_docked.ContainsKey(hwnd))
+            if (_docked.TryGetValue(hwnd, out var ineligible))
             {
-                _docked.Remove(hwnd);
+                Forget(ineligible, restoreIfHidden: true);
             }
             return;
         }
@@ -146,20 +142,19 @@ internal sealed class DockManager : IDisposable
             return;
         }
 
-        var monitor = WinApi.MonitorFromWindow(hwnd, 2);
-        var mi = WinApi.GetMonitorInfoSafe(monitor);
+        var mi = WinApi.GetMonitorInfoSafe(WinApi.MonitorFromWindow(hwnd, WinApi.MONITOR_DEFAULTTONEAREST));
 
-        if (TryGetDockEdge(rect, mi.rcMonitor, _settings.EdgeSensitivityPx, out var edge))
+        if (DockGeometry.TryGetDockEdge(rect, mi.rcMonitor, _settings.EdgeSensitivityPx, out var edge))
         {
             DockWindow(hwnd, rect, mi, edge);
         }
-        else
+        else if (_docked.TryGetValue(hwnd, out var undocked))
         {
-            _docked.Remove(hwnd);
+            Forget(undocked, restoreIfHidden: false);
         }
     }
 
-    private void DockWindow(IntPtr hwnd, WinApi.RECT rect, WinApi.MONITORINFO mi, DockEdge edge)
+    private void DockWindow(IntPtr hwnd, RECT rect, MONITORINFO mi, DockEdge edge)
     {
         if (!_docked.TryGetValue(hwnd, out var docked))
         {
@@ -167,86 +162,52 @@ internal sealed class DockManager : IDisposable
             _docked[hwnd] = docked;
         }
 
+        CancelAnimation(docked, snapToTarget: false);
+
         docked.Edge = edge;
         docked.Monitor = mi;
-        docked.ShownRect = GetSnappedRect(rect, mi.rcMonitor, edge);
-        docked.HiddenRect = GetHiddenRect(docked.ShownRect, mi.rcMonitor, edge, _settings.VisibleEdgePx);
+        docked.ShownRect = DockGeometry.SnapToEdge(rect, mi.rcMonitor, edge);
+        docked.HiddenRect = DockGeometry.HiddenRect(docked.ShownRect, mi.rcMonitor, edge, _settings.VisibleEdgePx);
         docked.IsHidden = true;
         docked.LastShownUtc = DateTime.UtcNow;
         docked.WasCursorInTriggerZone = false;
 
-        MoveWindow(hwnd, docked.HiddenRect);
+        if (!TryMoveWindow(hwnd, docked.HiddenRect))
+        {
+            // 移动失效（例如受 UIPI 保护的提权窗口）时不记录停靠，避免状态与实际不符
+            _docked.Remove(hwnd);
+            return;
+        }
+
     }
 
-    private void RecalculateRects(DockedWindow docked)
+    /// <summary>停止跟踪某个窗口；若它正停在隐藏位置，先移回可见位置，避免窗口"找不回来"。</summary>
+    private void Forget(DockedWindow docked, bool restoreIfHidden)
     {
-        var edge = docked.Edge;
-        var mi = docked.Monitor;
-        var shown = GetSnappedRect(docked.ShownRect, mi.rcMonitor, edge);
-        docked.ShownRect = shown;
-        docked.HiddenRect = GetHiddenRect(shown, mi.rcMonitor, edge, _settings.VisibleEdgePx);
-    }
+        var shouldRestore = DockWindowState.ShouldRestoreOnForget(
+            restoreIfHidden, docked.IsHidden, docked.IsAnimating);
 
-    private static WinApi.RECT GetSnappedRect(WinApi.RECT rect, WinApi.RECT monitor, DockEdge edge)
-    {
-        var width = rect.Width;
-        var height = rect.Height;
-        var x = rect.Left;
-        var y = rect.Top;
+        _docked.Remove(docked.Hwnd);
+        CancelAnimation(docked, snapToTarget: false);
 
-        if (edge == DockEdge.Left)
+        if (shouldRestore)
         {
-            x = monitor.Left;
-            y = Clamp(rect.Top, monitor.Top, monitor.Bottom - height);
+            MoveWindow(docked.Hwnd, docked.ShownRect);
         }
-        else if (edge == DockEdge.Right)
-        {
-            x = monitor.Right - width;
-            y = Clamp(rect.Top, monitor.Top, monitor.Bottom - height);
-        }
-        else if (edge == DockEdge.Top)
-        {
-            y = monitor.Top;
-            x = Clamp(rect.Left, monitor.Left, monitor.Right - width);
-        }
-        else if (edge == DockEdge.Bottom)
-        {
-            y = monitor.Bottom - height;
-            x = Clamp(rect.Left, monitor.Left, monitor.Right - width);
-        }
-
-        return new WinApi.RECT { Left = x, Top = y, Right = x + width, Bottom = y + height };
-    }
-
-    private static WinApi.RECT GetHiddenRect(WinApi.RECT shown, WinApi.RECT monitor, DockEdge edge, int visiblePx)
-    {
-        if (edge == DockEdge.Left)
-        {
-            var x = monitor.Left - (shown.Width - visiblePx);
-            return new WinApi.RECT { Left = x, Top = shown.Top, Right = x + shown.Width, Bottom = shown.Bottom };
-        }
-
-        if (edge == DockEdge.Right)
-        {
-            var x = monitor.Right - visiblePx;
-            return new WinApi.RECT { Left = x, Top = shown.Top, Right = x + shown.Width, Bottom = shown.Bottom };
-        }
-
-        if (edge == DockEdge.Top)
-        {
-            var yTop = monitor.Top - (shown.Height - visiblePx);
-            return new WinApi.RECT { Left = shown.Left, Top = yTop, Right = shown.Right, Bottom = yTop + shown.Height };
-        }
-
-        // Bottom: 窗口向下隐藏，保留 visiblePx 露在屏幕底部
-        var yBottom = monitor.Bottom - visiblePx;
-        return new WinApi.RECT { Left = shown.Left, Top = yBottom, Right = shown.Right, Bottom = yBottom + shown.Height };
     }
 
     private void PollMouseAndWindows()
     {
         if (IsPaused)
+        {
             return;
+        }
+
+        if (_docked.Count == 0)
+        {
+            _hintForm?.HideHint();
+            return;
+        }
 
         if ((WinApi.GetAsyncKeyState(WinApi.VK_LBUTTON) & 0x8000) != 0)
         {
@@ -260,25 +221,59 @@ internal sealed class DockManager : IDisposable
 
         var now = DateTime.UtcNow;
         var anyTriggerZone = false;
-        Point hintPoint = default;
+        POINT hintPoint = default;
         string? hintTitle = null;
 
         foreach (var docked in _docked.Values.ToList())
         {
             if (!WinApi.GetWindowRect(docked.Hwnd, out var currentRect))
             {
+                // 窗口已经关闭
                 _docked.Remove(docked.Hwnd);
                 continue;
             }
 
-            var dockedMonitor = WinApi.MonitorFromWindow(docked.Hwnd, 2);
-            docked.Monitor = WinApi.GetMonitorInfoSafe(dockedMonitor);
-            var isInTriggerZone = IsCursorInEdgeZone(
+            // 最小化、最大化的窗口无需刷新显示器布局。
+            if (WinApi.IsIconic(docked.Hwnd))
+            {
+                Forget(docked, restoreIfHidden: true);
+                continue;
+            }
+
+            if (WinApi.IsZoomed(docked.Hwnd))
+            {
+                Forget(docked, restoreIfHidden: false);
+                continue;
+            }
+
+            var currentMonitor = WinApi.GetMonitorInfoSafe(
+                WinApi.MonitorFromWindow(docked.Hwnd, WinApi.MONITOR_DEFAULTTONEAREST));
+
+            // 先用最新显示器边界识别全屏，再处理停靠窗口的几何重定位。
+            if (DockGeometry.IsFullscreen(currentRect, currentMonitor.rcMonitor))
+            {
+                Forget(docked, restoreIfHidden: false);
+                continue;
+            }
+
+            if (RectChanged(docked.Monitor.rcMonitor, currentMonitor.rcMonitor))
+            {
+                if (!RefreshMonitorBounds(docked, currentMonitor, out currentRect))
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                docked.Monitor = currentMonitor;
+            }
+
+            var isInTriggerZone = DockGeometry.IsCursorInEdgeZone(
                 pt,
                 docked.Monitor.rcMonitor,
                 docked.Edge,
                 _settings.EdgeSensitivityPx,
-                docked.ShownRect);  // v1.4: 传入窗口矩形，按 Y/X 范围过滤
+                docked.ShownRect);
             var enteredTriggerZone = isInTriggerZone && !docked.WasCursorInTriggerZone;
             docked.WasCursorInTriggerZone = isInTriggerZone;
 
@@ -286,7 +281,7 @@ internal sealed class DockManager : IDisposable
             if (docked.IsHidden && isInTriggerZone && !docked.IsAnimating)
             {
                 anyTriggerZone = true;
-                hintPoint = new Point(pt.X, pt.Y);
+                hintPoint = pt;
                 hintTitle = GetWindowTitle(docked.Hwnd);
             }
 
@@ -304,7 +299,7 @@ internal sealed class DockManager : IDisposable
             }
             else
             {
-                if (PointInRect(pt, currentRect))
+                if (DockGeometry.PointInRect(pt, currentRect))
                 {
                     continue;
                 }
@@ -322,12 +317,18 @@ internal sealed class DockManager : IDisposable
         }
 
         // 边缘提示：有隐藏窗口在触发区则显示标题，否则隐藏
-        if (_hintForm != null)
+        if (_hintForm == null)
         {
-            if (anyTriggerZone && hintTitle != null)
-                _hintForm.ShowHint(hintPoint, hintTitle);
-            else
-                _hintForm.HideHint();
+            return;
+        }
+
+        if (anyTriggerZone && hintTitle != null)
+        {
+            _hintForm.ShowHint(hintPoint, hintTitle);
+        }
+        else
+        {
+            _hintForm.HideHint();
         }
     }
 
@@ -352,39 +353,149 @@ internal sealed class DockManager : IDisposable
     }
 
     // v1.4: 增加 onCompleted 回调，动画完成后执行（如置顶 / 标记隐藏）
-    private void AnimateWindow(DockedWindow docked, WinApi.RECT from, WinApi.RECT to, Action? onCompleted = null)
+    private void AnimateWindow(DockedWindow docked, RECT from, RECT to, Action? onCompleted = null)
     {
+        CancelAnimation(docked, snapToTarget: false);
+
         docked.IsAnimating = true;
+        docked.AnimationTarget = to;
+        docked.AnimationCompleted = onCompleted;
 
-        var duration = _settings.EffectiveAnimationDurationMs;
-
+        var duration = Math.Max(1, _settings.EffectiveAnimationDurationMs);
         var sw = Stopwatch.StartNew();
         var timer = new FormsTimer { Interval = 15 };
+        docked.AnimationTimer = timer;
+
         timer.Tick += (_, _) =>
         {
             var linearT = Math.Min(1.0, sw.Elapsed.TotalMilliseconds / duration);
-            var t = EaseInOutQuad(linearT);  // 缓动曲线
-            var x = Lerp(from.Left, to.Left, t);
-            var y = Lerp(from.Top, to.Top, t);
+            var t = Easing.EaseInOutQuad(linearT);  // 缓动曲线
+            var x = Easing.Lerp(from.Left, to.Left, t);
+            var y = Easing.Lerp(from.Top, to.Top, t);
 
             WinApi.SetWindowPos(docked.Hwnd, IntPtr.Zero, x, y, 0, 0,
                 WinApi.SWP_NOZORDER | WinApi.SWP_NOACTIVATE | WinApi.SWP_NOSIZE);
 
             if (linearT >= 1.0)
             {
-                timer.Stop();
-                timer.Dispose();
-                docked.IsAnimating = false;
-                onCompleted?.Invoke();
+                FinishAnimation(docked);
             }
         };
+
         timer.Start();
     }
 
-    private static void MoveWindow(IntPtr hwnd, WinApi.RECT rect)
+    private static void FinishAnimation(DockedWindow docked)
+    {
+        var timer = docked.AnimationTimer;
+        docked.AnimationTimer = null;
+        if (timer != null)
+        {
+            timer.Stop();
+            timer.Dispose();
+        }
+
+        docked.IsAnimating = false;
+
+        var completed = docked.AnimationCompleted;
+        docked.AnimationCompleted = null;
+        completed?.Invoke();
+    }
+
+    /// <summary>
+    /// 结束进行中的动画。snapToTarget 为 true 时先把窗口落到原动画目标位置，
+    /// 保证窗口位置与停靠状态一致。
+    /// </summary>
+    private static void CancelAnimation(DockedWindow docked, bool snapToTarget)
+    {
+        var timer = docked.AnimationTimer;
+        if (timer == null)
+        {
+            docked.IsAnimating = false;
+            return;
+        }
+
+        docked.AnimationTimer = null;
+        timer.Stop();
+        timer.Dispose();
+        docked.IsAnimating = false;
+
+        var completed = docked.AnimationCompleted;
+        docked.AnimationCompleted = null;
+
+        if (!snapToTarget)
+        {
+            return;
+        }
+
+        MoveWindow(docked.Hwnd, docked.AnimationTarget);
+        completed?.Invoke();
+    }
+
+    /// <summary>移动窗口但不做校验（动画 / 设置变更 / 复位使用）。</summary>
+    private static void MoveWindow(IntPtr hwnd, RECT rect)
     {
         WinApi.SetWindowPos(hwnd, IntPtr.Zero, rect.Left, rect.Top, rect.Width, rect.Height,
             WinApi.SWP_NOZORDER | WinApi.SWP_NOACTIVATE);
+    }
+
+    /// <summary>
+    /// 移动窗口并回读校验：受 UIPI 保护的提权窗口或受系统限制时 SetWindowPos 会静默失败。
+    /// </summary>
+    private static bool TryMoveWindow(IntPtr hwnd, RECT rect)
+    {
+        if (!WinApi.SetWindowPos(hwnd, IntPtr.Zero, rect.Left, rect.Top, rect.Width, rect.Height,
+                WinApi.SWP_NOZORDER | WinApi.SWP_NOACTIVATE))
+        {
+            return false;
+        }
+
+        if (!WinApi.GetWindowRect(hwnd, out var actual))
+        {
+            return false;
+        }
+
+        // 允许少量误差：部分窗口会自行微调位置
+        const int tolerance = 8;
+        return Math.Abs(actual.Left - rect.Left) <= tolerance
+            && Math.Abs(actual.Top - rect.Top) <= tolerance;
+    }
+
+    /// <summary>显示器布局变化后，把停靠窗口和两个动画端点一起移到新边界。</summary>
+    private bool RefreshMonitorBounds(DockedWindow docked, MONITORINFO monitor, out RECT currentRect)
+    {
+        var animationTargetsHidden = docked.IsAnimating
+            && RectChanged(docked.AnimationTarget, docked.ShownRect);
+        var shouldBeHidden = DockWindowState.IsHiddenAtAnimationTarget(
+            docked.IsHidden, docked.IsAnimating, animationTargetsHidden);
+
+        CancelAnimation(docked, snapToTarget: false);
+        docked.Monitor = monitor;
+
+        var targets = DockGeometry.RebaseToMonitor(
+            docked.ShownRect, monitor.rcMonitor, docked.Edge, _settings.VisibleEdgePx);
+        docked.ShownRect = targets.ShownRect;
+        docked.HiddenRect = targets.HiddenRect;
+        docked.IsHidden = shouldBeHidden;
+        docked.WasCursorInTriggerZone = false;
+
+        var target = shouldBeHidden ? docked.HiddenRect : docked.ShownRect;
+        if (TryMoveWindow(docked.Hwnd, target)
+            && WinApi.GetWindowRect(docked.Hwnd, out currentRect))
+        {
+            return true;
+        }
+
+        // 若系统拒绝按新布局移动，尽力恢复到可见位置后停止跟踪。
+        MoveWindow(docked.Hwnd, docked.ShownRect);
+        _docked.Remove(docked.Hwnd);
+        currentRect = default;
+        return false;
+    }
+
+    private static bool RectChanged(RECT a, RECT b)
+    {
+        return a.Left != b.Left || a.Top != b.Top || a.Right != b.Right || a.Bottom != b.Bottom;
     }
 
     private static void BringWindowToFront(IntPtr hwnd)
@@ -406,7 +517,43 @@ internal sealed class DockManager : IDisposable
             0,
             WinApi.SWP_NOMOVE | WinApi.SWP_NOSIZE | WinApi.SWP_NOACTIVATE | WinApi.SWP_SHOWWINDOW);
         WinApi.BringWindowToTop(hwnd);
-        WinApi.SetForegroundWindow(hwnd);
+        SetForegroundWindowWithFallback(hwnd);
+    }
+
+    /// <summary>
+    /// SetForegroundWindow 在前台锁定限制下会静默失败（返回值也被忽略）。
+    /// 把本线程与前台线程的输入队列临时附加到一起可以绕过该限制。
+    /// </summary>
+    private static void SetForegroundWindowWithFallback(IntPtr hwnd)
+    {
+        var foreground = WinApi.GetForegroundWindow();
+        if (foreground == hwnd)
+        {
+            return;
+        }
+
+        var foregroundThread = WinApi.GetWindowThreadProcessId(foreground, out _);
+        var currentThread = WinApi.GetCurrentThreadId();
+        if (foregroundThread == 0 || foregroundThread == currentThread)
+        {
+            WinApi.SetForegroundWindow(hwnd);
+            return;
+        }
+
+        if (!WinApi.AttachThreadInput(foregroundThread, currentThread, true))
+        {
+            WinApi.SetForegroundWindow(hwnd);
+            return;
+        }
+
+        try
+        {
+            WinApi.SetForegroundWindow(hwnd);
+        }
+        finally
+        {
+            WinApi.AttachThreadInput(foregroundThread, currentThread, false);
+        }
     }
 
     private bool IsEligibleWindow(IntPtr hwnd)
@@ -438,117 +585,13 @@ internal sealed class DockManager : IDisposable
             return false;
         }
 
-        var monitor = WinApi.MonitorFromWindow(hwnd, 2);
-        var mi = WinApi.GetMonitorInfoSafe(monitor);
-        if (IsFullscreen(rect, mi.rcMonitor))
+        var mi = WinApi.GetMonitorInfoSafe(WinApi.MonitorFromWindow(hwnd, WinApi.MONITOR_DEFAULTTONEAREST));
+        if (DockGeometry.IsFullscreen(rect, mi.rcMonitor))
         {
             return false;
         }
 
         return true;
-    }
-
-    private static bool IsFullscreen(WinApi.RECT rect, WinApi.RECT monitor)
-    {
-        const int tolerance = 2;
-        return Math.Abs(rect.Left - monitor.Left) <= tolerance
-            && Math.Abs(rect.Top - monitor.Top) <= tolerance
-            && Math.Abs(rect.Right - monitor.Right) <= tolerance
-            && Math.Abs(rect.Bottom - monitor.Bottom) <= tolerance;
-    }
-
-    private static bool TryGetDockEdge(WinApi.RECT rect, WinApi.RECT monitor, int sensitivity, out DockEdge edge)
-    {
-        var candidates = new List<(DockEdge Edge, int Distance)>();
-
-        var leftDist = Math.Abs(rect.Left - monitor.Left);
-        if (leftDist <= sensitivity)
-        {
-            candidates.Add((DockEdge.Left, leftDist));
-        }
-
-        var rightDist = Math.Abs(monitor.Right - rect.Right);
-        if (rightDist <= sensitivity)
-        {
-            candidates.Add((DockEdge.Right, rightDist));
-        }
-
-        var topDist = Math.Abs(rect.Top - monitor.Top);
-        if (topDist <= sensitivity)
-        {
-            candidates.Add((DockEdge.Top, topDist));
-        }
-
-        var bottomDist = Math.Abs(monitor.Bottom - rect.Bottom);
-        if (bottomDist <= sensitivity)
-        {
-            candidates.Add((DockEdge.Bottom, bottomDist));
-        }
-
-        if (candidates.Count == 0)
-        {
-            edge = DockEdge.Left;
-            return false;
-        }
-
-        edge = candidates.OrderBy(c => c.Distance).First().Edge;
-        return true;
-    }
-
-    private static bool PointInRect(WinApi.POINT pt, WinApi.RECT rect)
-    {
-        return pt.X >= rect.Left && pt.X <= rect.Right && pt.Y >= rect.Top && pt.Y <= rect.Bottom;
-    }
-
-    // v1.4: 增加 windowRect 参数，同侧多窗口时只触发 Y/X 范围匹配的窗口
-    private static bool IsCursorInEdgeZone(WinApi.POINT pt, WinApi.RECT monitor, DockEdge edge, int sensitivity, WinApi.RECT windowRect)
-    {
-        var insideMonitor = pt.X >= monitor.Left && pt.X <= monitor.Right
-            && pt.Y >= monitor.Top && pt.Y <= monitor.Bottom;
-        if (!insideMonitor)
-        {
-            return false;
-        }
-
-        if (edge == DockEdge.Left)
-        {
-            return pt.X >= monitor.Left && pt.X <= monitor.Left + sensitivity
-                && pt.Y >= windowRect.Top && pt.Y <= windowRect.Bottom;
-        }
-
-        if (edge == DockEdge.Right)
-        {
-            return pt.X <= monitor.Right && pt.X >= monitor.Right - sensitivity
-                && pt.Y >= windowRect.Top && pt.Y <= windowRect.Bottom;
-        }
-
-        if (edge == DockEdge.Top)
-        {
-            return pt.Y >= monitor.Top && pt.Y <= monitor.Top + sensitivity
-                && pt.X >= windowRect.Left && pt.X <= windowRect.Right;
-        }
-
-        // Bottom: 鼠标在屏幕底部边缘区域
-        return pt.Y <= monitor.Bottom && pt.Y >= monitor.Bottom - sensitivity
-            && pt.X >= windowRect.Left && pt.X <= windowRect.Right;
-    }
-
-    private static int Lerp(int from, int to, double t)
-    {
-        return (int)Math.Round(from + (to - from) * t);
-    }
-
-    private static int Clamp(int value, int min, int max)
-    {
-        if (value < min) return min;
-        if (value > max) return max;
-        return value;
-    }
-
-    // ease-in-out 缓动曲线: t => t<0.5 ? 2*t² : 1-(-2t+2)²/2
-    private static double EaseInOutQuad(double t)
-    {
-        return t < 0.5 ? 2.0 * t * t : 1.0 - Math.Pow(-2.0 * t + 2.0, 2) / 2.0;
     }
 
     // 获取窗口标题
@@ -556,7 +599,7 @@ internal sealed class DockManager : IDisposable
     {
         var len = WinApi.GetWindowTextLength(hwnd);
         if (len <= 0) return null;
-        var sb = new System.Text.StringBuilder(len + 1);
+        var sb = new StringBuilder(len + 1);
         WinApi.GetWindowText(hwnd, sb, sb.Capacity);
         var title = sb.ToString();
         return string.IsNullOrWhiteSpace(title) ? null : title;
@@ -566,6 +609,11 @@ internal sealed class DockManager : IDisposable
     {
         _pollTimer.Stop();
         _pollTimer.Dispose();
+
+        foreach (var docked in _docked.Values.ToList())
+        {
+            CancelAnimation(docked, snapToTarget: false);
+        }
 
         if (_hookStart != IntPtr.Zero)
         {

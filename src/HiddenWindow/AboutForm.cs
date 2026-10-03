@@ -7,8 +7,6 @@ namespace HiddenWindow;
 
 internal sealed class AboutForm : Form
 {
-    private const string WebsiteUrl = "https://github.maziyang.top";
-
     public AboutForm()
     {
         Text = Localization.Get("about");
@@ -37,7 +35,7 @@ internal sealed class AboutForm : Form
         Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "VERSION 2.1.1 / OPEN SOURCE",
+            Text = $"VERSION {AppInfo.Version} / OPEN SOURCE",
             ForeColor = UiTheme.TextDim,
             Font = UiTheme.Font(8f, FontStyle.Bold),
             Location = new Point(122, 77)
@@ -90,7 +88,7 @@ internal sealed class AboutForm : Form
     {
         try
         {
-            Process.Start(new ProcessStartInfo(WebsiteUrl) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(AppInfo.WebsiteUrl) { UseShellExecute = true });
         }
         catch
         {

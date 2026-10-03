@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using HiddenWindow.Core;
 
 namespace HiddenWindow;
 
@@ -50,7 +51,7 @@ internal sealed class EdgeHintForm : Form
         };
     }
 
-    public void ShowHint(Point screenPos, string windowTitle)
+    public void ShowHint(POINT screenPos, string windowTitle)
     {
         if (string.IsNullOrWhiteSpace(windowTitle))
         {
@@ -65,13 +66,28 @@ internal sealed class EdgeHintForm : Form
         if ((now - _hoverStart).TotalMilliseconds < ShowDelayMs)
             return;
 
+        // 提示窗可能正显示着另一个窗口的标题，标题变化时立即刷新
+        if (_titleLabel.Text != windowTitle)
+            _titleLabel.Text = windowTitle;
+
+        // 先强制布局计算，确保 Width/Height 已根据最新文本更新，再定位
+        PerformLayout();
+
+        var workArea = Screen.FromPoint(new Point(screenPos.X, screenPos.Y)).WorkingArea;
+        var area = new RECT
+        {
+            Left = workArea.Left,
+            Top = workArea.Top,
+            Right = workArea.Right,
+            Bottom = workArea.Bottom
+        };
+
+        // 默认在光标右上方；顶部边缘改到下方，越界时贴边
+        var location = HintPlacement.Compute(screenPos, Width, Height, area);
+        Location = new Point(location.X, location.Y);
+
         if (!Visible)
         {
-            _titleLabel.Text = windowTitle;
-            // v1.4: 先强制布局计算，确保 Height 已根据新文本更新，再定位
-            PerformLayout();
-            // 定位在鼠标上方偏右
-            Location = new Point(screenPos.X + 12, screenPos.Y - Height - 8);
             Opacity = 0.96;
             Show();
             _hideTimer.Start();

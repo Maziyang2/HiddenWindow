@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using HiddenWindow.Core;
 
 namespace HiddenWindow;
 
@@ -109,7 +110,7 @@ internal sealed class SettingsForm : Form
         _languagePicker.Items.Add(Localization.Get("languageSystem"));
         _languagePicker.Items.Add(Localization.Get("languageChinese"));
         _languagePicker.Items.Add(Localization.Get("languageEnglish"));
-        _languagePicker.SelectedIndex = (int)settings.Language;
+        _languagePicker.SelectedIndex = Math.Clamp((int)settings.Language, 0, _languagePicker.Items.Count - 1);
 
         var preferencesCard = new ModernCard
         {
@@ -386,7 +387,7 @@ internal sealed class SettingsForm : Form
         footer.Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "v2.1.1  /  github.maziyang.top",
+            Text = $"v{AppInfo.Version}  /  {AppInfo.WebsiteHost}",
             ForeColor = UiTheme.TextDim,
             Font = UiTheme.Font(8f, FontStyle.Bold),
             Location = new Point(28, 28)
@@ -449,7 +450,7 @@ internal sealed class SettingsForm : Form
         _settings.HideDelayMs = _hideDelaySlider.Value;
         _settings.HotkeyEnabled = _hotkeyToggle.Checked;
         _settings.AutoStart = _autoStartToggle.Checked;
-        _settings.Language = (LanguageMode)Math.Max(0, _languagePicker.SelectedIndex);
+        _settings.Language = (LanguageMode)Math.Clamp(_languagePicker.SelectedIndex, 0, _languagePicker.Items.Count - 1);
         _settings.Save();
         Localization.Configure(_settings.Language);
         _onSave(_settings);

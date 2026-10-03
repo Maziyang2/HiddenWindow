@@ -21,6 +21,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Test
+        run: dotnet test tests/HiddenWindow.Tests/HiddenWindow.Tests.csproj -c Release --nologo
+
       - name: Publish
         run: >
           dotnet publish src/HiddenWindow/HiddenWindow.csproj
